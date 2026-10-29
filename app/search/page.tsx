@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { DocTable } from "@/components/DocTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { money } from "@/lib/format";
@@ -47,6 +47,15 @@ export default function SearchPage() {
     error: reduxError,
   } = useAppSelector((state) => state.search);
 
+  // Mounted guard to ensure 100% deterministic SSR/Client hydration matching
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // During SSR and initial client hydration pass, use default "rag"
+  const activeMode: SearchMode = mounted ? (mode || "rag") : "rag";
+
   // Local filter fields for "filters" mode
   const [f, setF] = useState<Record<string, string>>({});
   const [needsReview, setNeedsReview] = useState(false);
@@ -62,7 +71,7 @@ export default function SearchPage() {
     router.push(`/documents/${docId}`);
   }
 
-  async function executeSearch(queryText: string, searchMode = mode) {
+  async function executeSearch(queryText: string, searchMode = activeMode) {
     setLocalError(null);
     setActiveQueryInfo(null);
 
@@ -110,7 +119,7 @@ export default function SearchPage() {
 
   function run(e: FormEvent) {
     e.preventDefault();
-    void executeSearch(q, mode);
+    void executeSearch(q, activeMode);
   }
 
   function handleExampleClick(query: string) {
@@ -164,7 +173,7 @@ export default function SearchPage() {
   }
 
   return (
-    <div style={{ maxWidth: 1100, margin: "0 auto", paddingBottom: 60 }}>
+    <div style={{ maxWidth: 1100, margin: "0 auto", paddingBottom: 60 }} suppressHydrationWarning>
       {/* Page Header */}
       <div className="page-head">
         <div>
@@ -189,8 +198,8 @@ export default function SearchPage() {
             key={m}
             type="button"
             role="tab"
-            aria-selected={mode === m}
-            className={mode === m ? "on" : ""}
+            aria-selected={activeMode === m}
+            className={activeMode === m ? "on" : ""}
             onClick={() => {
               dispatch(setMode(m));
               setLocalError(null);
@@ -210,9 +219,9 @@ export default function SearchPage() {
             <input
               type="search"
               placeholder={
-                mode === "rag"
+                activeMode === "rag"
                   ? "Ask any question (e.g. What is our total spend? What are the payment terms on the latest invoice?)"
-                  : mode === "filters"
+                  : activeMode === "filters"
                   ? "Optional text query..."
                   : "Search documents by keywords, supplier, or invoice numbers..."
               }
@@ -228,17 +237,17 @@ export default function SearchPage() {
             style={{ height: 42, padding: "0 24px", fontWeight: 600 }}
           >
             {busy
-              ? mode === "rag"
+              ? activeMode === "rag"
                 ? "Synthesizing Answer..."
                 : "Searching..."
-              : mode === "rag"
+              : activeMode === "rag"
               ? "⚡ Ask AI Assistant"
               : "Search"}
           </button>
         </div>
 
         {/* Quick Example Prompt Pills */}
-        {mode !== "filters" && (
+        {activeMode !== "filters" && (
           <div style={{ marginTop: 14 }}>
             <div style={{ fontSize: 12, color: "#64748b", fontWeight: 600, marginBottom: 8 }}>
               Try sample questions:
@@ -277,7 +286,7 @@ export default function SearchPage() {
         )}
 
         {/* Structured Filter Grid (if mode === 'filters') */}
-        {mode === "filters" && (
+        {activeMode === "filters" && (
           <div className="form-grid" style={{ marginTop: 16 }}>
             <div className="field">
               <label>Supplier</label>
