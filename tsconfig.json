@@ -36,7 +36,6 @@
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules",
-    "open-next.config.ts"
+    "node_modules"
   ]
 }
