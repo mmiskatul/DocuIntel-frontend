@@ -11,7 +11,7 @@ import type { DocFilters, DocumentOut, RAGResult, SearchHit } from "@/lib/types"
 
 type Mode = "rag" | "hybrid" | "filters";
 const MODES: [Mode, string, string][] = [
-  ["rag", "⚡ AI Analyst (RAG)", "LangChain vector retrieval + GPT-4o-mini answering with citations"],
+  ["rag", "⚡ AI Document Analyst", "Semantic vector retrieval + answering with citations"],
   ["hybrid", "🔍 Smart Search", "Semantic vector embeddings + keyword matching"],
   ["filters", "📊 Structured Filters", "Filter by supplier, date range, and amount"],
 ];
@@ -74,10 +74,10 @@ export default function SearchPage() {
         setDocs(results);
       } else if (searchMode === "rag") {
         if (!queryText.trim()) {
-          setError("Please enter a question to ask the AI Financial Analyst (RAG).");
+          setError("Please enter a question to ask the AI Assistant.");
           return;
         }
-        setActiveQueryInfo("Querying LangChain pgvector cosine retrieval + OpenAI GPT-4o-mini synthesis...");
+        setActiveQueryInfo("Analyzing documents and synthesizing answer...");
         const rag = await api.ragSearch(queryText.trim());
         setRagResult(rag);
         setHits(rag.hits || []);
@@ -86,7 +86,7 @@ export default function SearchPage() {
           setError("Please enter a search query or select an example prompt below.");
           return;
         }
-        setActiveQueryInfo("Executing semantic vector similarity and keyword search...");
+        setActiveQueryInfo("Searching document repository...");
         const results = await api.search(queryText.trim(), searchMode);
         setHits(results);
       }
@@ -157,9 +157,9 @@ export default function SearchPage() {
       {/* Page Header */}
       <div className="page-head">
         <div>
-          <h1>AI Search &amp; RAG Analyst</h1>
+          <h1>AI Search &amp; Document Intelligence</h1>
           <div className="muted">
-            Ask natural language questions across all indexed invoices and documents using LangChain pgvector RAG.
+            Ask natural language questions across all indexed invoices and documents using semantic vector search.
           </div>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
@@ -214,7 +214,7 @@ export default function SearchPage() {
             disabled={busy}
             style={{ height: 42, padding: "0 24px", fontWeight: 600 }}
           >
-            {busy ? (mode === "rag" ? "Synthesizing RAG..." : "Searching...") : mode === "rag" ? "⚡ Ask AI (RAG)" : "Search"}
+            {busy ? (mode === "rag" ? "Synthesizing Answer..." : "Searching...") : mode === "rag" ? "⚡ Ask AI Assistant" : "Search"}
           </button>
         </div>
 
@@ -356,7 +356,7 @@ export default function SearchPage() {
                   border: "1px solid #e2e8f0",
                 }}
               >
-                Engine: {ragResult.provider_used || "LangChain + GPT-4o-mini"}
+                Engine: {ragResult.provider_used || "DocuIntel Engine"}
               </span>
             </div>
           </div>
@@ -444,7 +444,7 @@ export default function SearchPage() {
 
           {!hits.length ? (
             <div className="empty" style={{ padding: "40px 20px", textAlign: "center" }}>
-              Nothing matched your query. Try different terms or ask a question in RAG mode.
+              Nothing matched your query. Try different terms or ask a question in AI Analyst mode.
             </div>
           ) : (
             <div className="table-wrap">
@@ -584,14 +584,14 @@ export default function SearchPage() {
         }}
       >
         <div>
-          <strong style={{ color: "#334155" }}>DocuIntel Enterprise v3.2</strong> • LangChain Multi-Modal Agent Engine Active
+          <strong style={{ color: "#334155" }}>DocuIntel Enterprise v3.2</strong> • Document Intelligence Engine Active
         </div>
         <div style={{ display: "flex", gap: 16 }}>
           <a href="#" onClick={(e) => e.preventDefault()} style={{ color: "#64748b", textDecoration: "none" }}>
             API Documentation
           </a>
           <a href="#" onClick={(e) => e.preventDefault()} style={{ color: "#64748b", textDecoration: "none" }}>
-            Vector Index Status
+            System Status
           </a>
           <a href="#" onClick={(e) => e.preventDefault()} style={{ color: "#64748b", textDecoration: "none" }}>
             Security &amp; Compliance (SOC2)

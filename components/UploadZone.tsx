@@ -144,7 +144,7 @@ export function UploadZone({ onUploaded }: { onUploaded: () => void }) {
               gap: 4,
             }}
           >
-            🔍 Auto RAG Embeddings
+            🔍 Smart Search Ready
           </span>
           <span
             style={{
@@ -261,7 +261,7 @@ export function UploadZone({ onUploaded }: { onUploaded: () => void }) {
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: "#16a34a" }} />
             <span>
-              <strong>{uploadSuccessCount} file(s) queued for processing</strong> — progress appears below. LangChain OCR &amp; extraction pipeline running in background.
+              <strong>{uploadSuccessCount} file(s) queued for processing</strong> — progress appears below. Document extraction pipeline running in background.
             </span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>

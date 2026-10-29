@@ -149,7 +149,7 @@ export default function DocumentsDashboard() {
             Document Intelligence
           </h1>
           <p style={{ margin: 0, fontSize: 13, color: "#64748b", maxWidth: 780, lineHeight: 1.5 }}>
-            Upload multi-format invoices, receipts, and contracts. LangChain extraction pipelines isolate key-value tables, compute semantic confidence scores, and sync vector embeddings.
+            Upload invoices, receipts, and contracts. Smart extraction isolates key-value tables, verifies totals, and enables instant search.
           </p>
         </div>
 
@@ -171,7 +171,7 @@ export default function DocumentsDashboard() {
             }}
           >
             <span style={{ fontSize: 13 }}>ℹ</span>
-            LangChain v2.4 Vision-LLM
+            DocuIntel v2.4 Vision Engine
           </div>
           <Link href="/search" style={{ fontSize: 12, color: "#2563eb", fontWeight: 500, textDecoration: "none" }}>
             Config
@@ -213,7 +213,7 @@ export default function DocumentsDashboard() {
             </div>
           </div>
           <div style={{ fontSize: 11.5, color: "#94a3b8" }}>
-            Vectorized across 3 embedding indexes
+            Indexed for search &amp; analytics
           </div>
         </div>
 
@@ -300,7 +300,7 @@ export default function DocumentsDashboard() {
             </div>
           </div>
           <div style={{ fontSize: 11.5, color: "#94a3b8" }}>
-            OCR embedding generation active
+            Document queue active
           </div>
         </div>
       </div>
@@ -331,7 +331,7 @@ export default function DocumentsDashboard() {
                 borderRadius: 4,
               }}
             >
-              Auto-Vectorize Enabled
+              Auto-Processing Active
             </span>
           </div>
 
@@ -742,14 +742,14 @@ export default function DocumentsDashboard() {
         }}
       >
         <div>
-          <strong style={{ color: "#334155" }}>DocuIntel Enterprise v3.2</strong> • LangChain Multi-Modal Agent Engine Active
+          <strong style={{ color: "#334155" }}>DocuIntel Enterprise v3.2</strong> • Document Intelligence Engine Active
         </div>
         <div style={{ display: "flex", gap: 16 }}>
           <a href="#" onClick={(e) => e.preventDefault()} style={{ color: "#64748b", textDecoration: "none" }}>
             API Documentation
           </a>
           <a href="#" onClick={(e) => e.preventDefault()} style={{ color: "#64748b", textDecoration: "none" }}>
-            Vector Index Status
+            System Status
           </a>
           <a href="#" onClick={(e) => e.preventDefault()} style={{ color: "#64748b", textDecoration: "none" }}>
             Security &amp; Compliance (SOC2)

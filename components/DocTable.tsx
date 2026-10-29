@@ -83,7 +83,7 @@ export function DocTable({
     }
     if (d.status === "processing" || d.status === "queued") {
       const p = Math.round((d.progress || 0.64) * 100);
-      return { label: `Vectorizing ${p}%`, percent: p, color: "#2563eb", track: "#dbeafe" };
+      return { label: `Processing ${p}%`, percent: p, color: "#2563eb", track: "#dbeafe" };
     }
     return { label: "High 98.8%", percent: 98.8, color: "#16a34a", track: "#dcfce7" };
   };

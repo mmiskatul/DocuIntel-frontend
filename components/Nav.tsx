@@ -43,7 +43,7 @@ export function Nav() {
             background: "var(--primary-soft)",
             color: "var(--primary)"
           }}>
-            AI OCR &amp; RAG
+            AI Document Intelligence
           </span>
         </Link>
 
