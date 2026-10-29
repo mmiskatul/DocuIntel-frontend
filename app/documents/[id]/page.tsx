@@ -70,10 +70,10 @@ export default function DocumentPage() {
   const activeFieldEvidence = selectedField || {
     key: "total",
     label: "Total Due",
-    value: data.total != null ? `$${Number(data.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : "$15,046.75",
+    value: data.total != null ? `$${Number(data.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : "—",
     confidence: Math.round((data.field_confidence?.total || 0.95) * 100),
     page: 1,
-    sourceSnippet: "Total Due: $15,046.75",
+    sourceSnippet: data.total != null ? `Total Due: $${Number(data.total).toLocaleString()}` : "Document Information",
     box: [[550, 600], [700, 600], [700, 630], [550, 630]],
   };
 
@@ -95,7 +95,7 @@ export default function DocumentPage() {
     setActionMsg(null);
     try {
       await api.approve(d.id, "reviewer@company.com");
-      setActionMsg({ type: "success", text: "Document approved successfully and synced to QuickBooks / ERP!" });
+      setActionMsg({ type: "success", text: "Document approved successfully." });
       await doc.refresh();
       const updatedHistory = await api.getHistory(d.id);
       setHistory(updatedHistory);
@@ -206,6 +206,14 @@ export default function DocumentPage() {
         </button>
         <button
           role="tab"
+          aria-selected={tab === "text"}
+          className={`tab ${tab === "text" ? "active" : ""}`}
+          onClick={() => setTab("text")}
+        >
+          Extracted Raw Text
+        </button>
+        <button
+          role="tab"
           aria-selected={tab === "history"}
           className={`tab ${tab === "history" ? "active" : ""}`}
           onClick={() => setTab("history")}
@@ -255,10 +263,10 @@ export default function DocumentPage() {
                     </div>
                     <ul style={{ margin: "8px 0 0", paddingLeft: 20, color: "#475569", fontSize: 13, display: "grid", gap: 4 }}>
                       <li>
-                        <strong>Total arithmetic discrepancy:</strong> Expected ৳{expectedTotal?.toFixed(2)} based on subtotal (৳{Number(data.subtotal || 0).toFixed(2)}) + tax (৳{Number(data.tax || 0).toFixed(2)}), but extracted total is ৳{Number(data.total || 0).toFixed(2)}. Difference: ৳{mismatchDiff}.
+                        <strong>Total arithmetic discrepancy:</strong> Expected {expectedTotal?.toFixed(2)} based on subtotal ({Number(data.subtotal || 0).toFixed(2)}) + tax ({Number(data.tax || 0).toFixed(2)}), but extracted total is {Number(data.total || 0).toFixed(2)}. Difference: {mismatchDiff}.
                       </li>
-                      <li>Document date is verified (ISO-8601 compliant).</li>
-                      <li>Legal entity name confirmed: {data.supplier_name || "Nexora Solutions LLC"}.</li>
+                      <li>Document date: {data.invoice_date || "—"}</li>
+                      <li>Vendor name: {data.supplier_name || "—"}</li>
                     </ul>
                   </div>
                   <button
@@ -272,26 +280,6 @@ export default function DocumentPage() {
                     Fix Total
                   </button>
                 </div>
-              </div>
-
-              {/* Amber Warning Box */}
-              <div
-                style={{
-                  background: "#fffbe6",
-                  border: "1px solid #ffe58f",
-                  borderRadius: 8,
-                  padding: "10px 16px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  color: "#873800",
-                  fontSize: 13,
-                }}
-              >
-                <span>⚠️</span>
-                <span>
-                  <strong>Line item verification:</strong> Sum of 3 extracted line items equals $13,900.00. Tax calculation rate: 8.25%.
-                </span>
               </div>
             </div>
           )}
@@ -342,63 +330,48 @@ export default function DocumentPage() {
               {/* Document Rendering Canvas / SVG Viewer */}
               <div
                 style={{
-                  padding: 20,
+                  padding: 12,
                   display: "flex",
                   justifyContent: "center",
-                  background: "#334155",
+                  background: "#1e293b",
                   minHeight: 650,
-                  overflow: "auto",
+                  overflow: "hidden",
                 }}
               >
                 <div
                   style={{
-                    transform: `scale(${zoom / 100})`,
-                    transformOrigin: "top center",
-                    transition: "transform 0.15s ease",
-                    boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
-                    borderRadius: 4,
+                    width: "100%",
+                    display: "flex",
+                    justifyContent: "center",
+                    borderRadius: 6,
                     overflow: "hidden",
-                    position: "relative",
                   }}
                 >
-                  <img
-                    src={api.fileUrl(d.id)}
-                    alt="Document preview"
-                    style={{ width: 560, height: 790, objectFit: "contain", background: "#fff", display: "block" }}
-                    onError={(e) => {
-                      // Fallback SVG if raster image fails to load
-                      (e.target as HTMLImageElement).src = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="560" height="790" style="background:%23fff; font-family:sans-serif;"><text x="50" y="80" font-size="22" font-weight="bold">NEXORA SOLUTIONS LLC</text><text x="400" y="80" font-size="26" font-weight="bold">INVOICE</text><rect x="390" y="95" width="130" height="30" fill="%23fef9c3" stroke="%23eab308"/><text x="400" y="115" font-size="12">INV-2026-0417</text><rect x="340" y="580" width="180" height="30" fill="%23fef08a" stroke="%23ca8a04"/><text x="350" y="600" font-size="13" font-weight="bold">Total Due: $15,046.75</text></svg>`;
-                    }}
-                  />
-
-                  {/* Dynamic Bounding Box Overlay for Active Field */}
-                  {activeFieldEvidence.key === "total" && (
-                    <div
+                  {d.filename?.toLowerCase().endsWith(".pdf") || d.file_type === "application/pdf" ? (
+                    <iframe
+                      src={api.fileUrl(d.id)}
+                      title={d.filename}
                       style={{
-                        position: "absolute",
-                        left: 335,
-                        top: 590,
-                        width: 195,
-                        height: 34,
-                        border: "2px solid #ca8a04",
-                        background: "rgba(254, 240, 138, 0.45)",
-                        borderRadius: 4,
-                        pointerEvents: "none",
+                        width: "100%",
+                        height: 750,
+                        border: "none",
+                        borderRadius: 6,
+                        background: "#ffffff",
                       }}
                     />
-                  )}
-                  {activeFieldEvidence.key === "invoice_number" && (
-                    <div
+                  ) : (
+                    <img
+                      src={api.fileUrl(d.id)}
+                      alt={d.filename}
                       style={{
-                        position: "absolute",
-                        left: 375,
-                        top: 92,
-                        width: 155,
-                        height: 32,
-                        border: "2px solid #2563eb",
-                        background: "rgba(219, 234, 254, 0.45)",
-                        borderRadius: 4,
-                        pointerEvents: "none",
+                        maxWidth: "100%",
+                        maxHeight: 750,
+                        objectFit: "contain",
+                        background: "#fff",
+                        display: "block",
+                      }}
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="560" height="790" style="background:%23f8fafc; font-family:sans-serif;"><rect width="100%" height="100%" fill="%23f8fafc"/><text x="280" y="380" font-size="16" fill="%2364748b" text-anchor="middle">Document Preview</text></svg>`;
                       }}
                     />
                   )}
@@ -406,10 +379,10 @@ export default function DocumentPage() {
               </div>
             </div>
 
-            {/* Right Column: Extracted Fields (Matches Image 1) */}
+            {/* Right Column: Extracted Fields */}
             <div style={{ display: "grid", gap: 14 }}>
               <div className="card" style={{ margin: 0, padding: 20 }}>
-                {/* Header with Average Confidence */}
+                {/* Header with Extracted Fields */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                   <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Extracted fields</h2>
                   <div
@@ -422,7 +395,7 @@ export default function DocumentPage() {
                       fontWeight: 700,
                     }}
                   >
-                    94% average confidence
+                    {data.overall_confidence ? `${Math.round(data.overall_confidence * 100)}% confidence` : "Extracted"}
                   </div>
                 </div>
 
@@ -442,16 +415,13 @@ export default function DocumentPage() {
                   >
                     <span className="muted" style={{ fontSize: 13 }}>Invoice Number</span>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <strong style={{ fontSize: 14 }}>{data.invoice_number || "INV-2026-0417"}</strong>
-                      <span style={{ fontSize: 11, background: "#e8eefc", color: "#2457e6", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>
-                        95%
-                      </span>
-                      <span style={{ color: "#12805c" }}>✓</span>
+                      <strong style={{ fontSize: 14 }}>{data.invoice_number || "—"}</strong>
+                      {data.invoice_number && <span style={{ color: "#12805c" }}>✓</span>}
                     </div>
                   </div>
 
                   <div
-                    onClick={() => handleFieldClick("invoice_date", "Invoice Date", data.invoice_date, 98)}
+                    onClick={() => handleFieldClick("invoice_date", "Invoice Date", data.invoice_date, 95)}
                     style={{
                       display: "flex",
                       justifyContent: "space-between",
@@ -464,16 +434,13 @@ export default function DocumentPage() {
                   >
                     <span className="muted" style={{ fontSize: 13 }}>Invoice Date</span>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <strong style={{ fontSize: 14 }}>{data.invoice_date || "May 28, 2026"}</strong>
-                      <span style={{ fontSize: 11, background: "#e8eefc", color: "#2457e6", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>
-                        98%
-                      </span>
-                      <span style={{ color: "#12805c" }}>✓</span>
+                      <strong style={{ fontSize: 14 }}>{data.invoice_date || "—"}</strong>
+                      {data.invoice_date && <span style={{ color: "#12805c" }}>✓</span>}
                     </div>
                   </div>
 
                   <div
-                    onClick={() => handleFieldClick("due_date", "Due Date", data.due_date || "Jun 27, 2026", 96)}
+                    onClick={() => handleFieldClick("due_date", "Due Date", data.due_date, 90)}
                     style={{
                       display: "flex",
                       justifyContent: "space-between",
@@ -486,60 +453,56 @@ export default function DocumentPage() {
                   >
                     <span className="muted" style={{ fontSize: 13 }}>Due Date</span>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <strong style={{ fontSize: 14 }}>{data.due_date || "Jun 27, 2026"}</strong>
-                      <span style={{ fontSize: 11, background: "#e8eefc", color: "#2457e6", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>
-                        96%
-                      </span>
-                      <span style={{ color: "#12805c" }}>✓</span>
+                      <strong style={{ fontSize: 14 }}>{data.due_date || "—"}</strong>
+                      {data.due_date && <span style={{ color: "#12805c" }}>✓</span>}
                     </div>
                   </div>
                 </div>
 
-                {/* Section 2: Line Items (3 items) */}
+                {/* Section 2: Line Items */}
                 <div style={{ padding: "14px 0", borderBottom: "1px solid var(--border)" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                    <strong style={{ fontSize: 13 }}>Line Items ({lineItems.length || 3} items)</strong>
-                    <button className="btn-link small" onClick={() => handleFieldClick("line_items", "Line Items", "3 items")}>
-                      Review all
-                    </button>
+                    <strong style={{ fontSize: 13 }}>Line Items ({lineItems.length} items)</strong>
+                    {lineItems.length > 0 && (
+                      <button className="btn-link small" onClick={() => handleFieldClick("line_items", "Line Items", `${lineItems.length} items`)}>
+                        Review all
+                      </button>
+                    )}
                   </div>
 
-                  <div style={{ display: "grid", gap: 8 }}>
-                    {(lineItems.length > 0
-                      ? lineItems
-                      : [
-                          { description: "Cloud Infrastructure Upgrade", quantity: 2, unit_price: 5000, amount: 10000 },
-                          { description: "Data Integration & ETL", quantity: 1, unit_price: 2400, amount: 2400 },
-                          { description: "Security Assessment", quantity: 1, unit_price: 1500, amount: 1500 },
-                        ]
-                    ).map((item, idx) => (
-                      <div
-                        key={idx}
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "2fr 0.5fr 1fr 1fr auto",
-                          gap: 8,
-                          alignItems: "center",
-                          fontSize: 12,
-                          padding: "6px 8px",
-                          background: "#f8fafc",
-                          borderRadius: 6,
-                        }}
-                      >
-                        <span style={{ fontWeight: 600 }}>{item.description}</span>
-                        <span className="muted">{item.quantity}</span>
-                        <span className="muted">${Number(item.unit_price).toLocaleString()}</span>
-                        <strong style={{ textAlign: "right" }}>${Number(item.amount).toLocaleString()}</strong>
-                        <span style={{ color: "#12805c", marginLeft: 4 }}>✓</span>
-                      </div>
-                    ))}
-                  </div>
+                  {lineItems.length === 0 ? (
+                    <div className="small muted" style={{ padding: "6px 0" }}>No line items detected in document.</div>
+                  ) : (
+                    <div style={{ display: "grid", gap: 8 }}>
+                      {lineItems.map((item, idx) => (
+                        <div
+                          key={idx}
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "2fr 0.5fr 1fr 1fr auto",
+                            gap: 8,
+                            alignItems: "center",
+                            fontSize: 12,
+                            padding: "6px 8px",
+                            background: "#f8fafc",
+                            borderRadius: 6,
+                          }}
+                        >
+                          <span style={{ fontWeight: 600 }}>{item.description || "Item"}</span>
+                          <span className="muted">{item.quantity ?? "—"}</span>
+                          <span className="muted">{item.unit_price != null ? `$${Number(item.unit_price).toLocaleString()}` : "—"}</span>
+                          <strong style={{ textAlign: "right" }}>{item.amount != null ? `$${Number(item.amount).toLocaleString()}` : "—"}</strong>
+                          <span style={{ color: "#12805c", marginLeft: 4 }}>✓</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Section 3: Totals */}
                 <div style={{ padding: "14px 0", borderBottom: "1px solid var(--border)", display: "grid", gap: 10 }}>
                   <div
-                    onClick={() => handleFieldClick("subtotal", "Subtotal", data.subtotal, 96)}
+                    onClick={() => handleFieldClick("subtotal", "Subtotal", data.subtotal, 95)}
                     style={{
                       display: "flex",
                       justifyContent: "space-between",
@@ -553,17 +516,14 @@ export default function DocumentPage() {
                     <span className="muted" style={{ fontSize: 13 }}>Subtotal</span>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <strong style={{ fontSize: 14 }}>
-                        ${Number(data.subtotal || 13900).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        {data.subtotal != null ? `$${Number(data.subtotal).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : "—"}
                       </strong>
-                      <span style={{ fontSize: 11, background: "#e8eefc", color: "#2457e6", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>
-                        96%
-                      </span>
-                      <span style={{ color: "#12805c" }}>✓</span>
+                      {data.subtotal != null && <span style={{ color: "#12805c" }}>✓</span>}
                     </div>
                   </div>
 
                   <div
-                    onClick={() => handleFieldClick("tax", "Tax (8.25%)", data.tax, 93)}
+                    onClick={() => handleFieldClick("tax", "Tax", data.tax, 90)}
                     style={{
                       display: "flex",
                       justifyContent: "space-between",
@@ -574,20 +534,17 @@ export default function DocumentPage() {
                       cursor: "pointer",
                     }}
                   >
-                    <span className="muted" style={{ fontSize: 13 }}>Tax (8.25%)</span>
+                    <span className="muted" style={{ fontSize: 13 }}>Tax</span>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <strong style={{ fontSize: 14 }}>
-                        ${Number(data.tax || 1146.75).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        {data.tax != null ? `$${Number(data.tax).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : "—"}
                       </strong>
-                      <span style={{ fontSize: 11, background: "#e8eefc", color: "#2457e6", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>
-                        93%
-                      </span>
-                      <span style={{ color: "#12805c" }}>✓</span>
+                      {data.tax != null && <span style={{ color: "#12805c" }}>✓</span>}
                     </div>
                   </div>
 
                   <div
-                    onClick={() => handleFieldClick("total", "Total Due", data.total, 98)}
+                    onClick={() => handleFieldClick("total", "Total", data.total, 98)}
                     style={{
                       display: "flex",
                       justifyContent: "space-between",
@@ -599,30 +556,25 @@ export default function DocumentPage() {
                       cursor: "pointer",
                     }}
                   >
-                    <span style={{ fontSize: 14, fontWeight: 700, color: "#854d0e" }}>Total Due</span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: "#854d0e" }}>Total</span>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <strong style={{ fontSize: 16, color: "#1e293b" }}>
-                        ${Number(data.total || 15046.75).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        {data.total != null ? `$${Number(data.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : "—"}
                       </strong>
-                      <span style={{ fontSize: 11, background: "#fef08a", color: "#854d0e", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>
-                        {activeFieldEvidence.confidence}%
-                      </span>
-                      <span style={{ color: "#12805c" }}>✓</span>
+                      {data.total != null && <span style={{ color: "#12805c" }}>✓</span>}
                     </div>
                   </div>
                 </div>
 
-                {/* Section 4: Vendor & Remit To */}
+                {/* Section 4: Vendor & Customer */}
                 <div style={{ paddingTop: 14, fontSize: 12, display: "grid", gap: 8 }}>
                   <div>
-                    <div className="muted" style={{ fontWeight: 600, marginBottom: 2 }}>Vendor</div>
-                    <div style={{ fontWeight: 700, color: "#0f172a" }}>{data.supplier_name || "Nexora Solutions LLC"}</div>
-                    <div className="muted">123 Innovation Way, Suite 400 • Austin, TX 78701</div>
-                    <div className="muted">support@nexorasolutions.com</div>
+                    <div className="muted" style={{ fontWeight: 600, marginBottom: 2 }}>Vendor / Supplier</div>
+                    <div style={{ fontWeight: 700, color: "#0f172a" }}>{data.supplier_name || "—"}</div>
                   </div>
                   <div>
-                    <div className="muted" style={{ fontWeight: 600, marginBottom: 2 }}>Remit To</div>
-                    <div className="muted">Nexora Solutions LLC • PO Box 98765 • Austin, TX 78701</div>
+                    <div className="muted" style={{ fontWeight: 600, marginBottom: 2 }}>Customer / Bill To</div>
+                    <div style={{ fontWeight: 600, color: "#334155" }}>{data.customer_name || "—"}</div>
                   </div>
                 </div>
               </div>
@@ -744,11 +696,8 @@ export default function DocumentPage() {
               <button onClick={exportCsv} className="btn">
                 Export CSV
               </button>
-              <button onClick={exportCsv} className="btn">
-                Export Excel
-              </button>
               <button onClick={handleApprove} className="btn btn-primary" disabled={busy}>
-                {busy ? "Syncing..." : "Approve & Sync to QuickBooks"}
+                {busy ? "Saving..." : "✓ Approve Document"}
               </button>
             </div>
           </div>
@@ -756,7 +705,52 @@ export default function DocumentPage() {
       )}
 
       {/* =========================================================================
-          TAB 2: DOCUMENT HISTORY & AUDIT TRAIL (Matches Image 5)
+          TAB 2: EXTRACTED RAW TEXT (100% Real Extracted Data View)
+         ========================================================================= */}
+      {tab === "text" && (
+        <div className="card" style={{ padding: 24 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, borderBottom: "1px solid var(--border)", paddingBottom: 14 }}>
+            <div>
+              <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>
+                Raw Extracted Document Text
+              </h2>
+              <div className="muted small">
+                Every word and line extracted directly from {d.filename} ({d.page_count || 1} page{d.page_count > 1 ? "s" : ""}).
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(data.raw_text || "");
+                setActionMsg({ type: "success", text: "Extracted text copied to clipboard!" });
+              }}
+              className="btn btn-sm btn-primary"
+            >
+              📋 Copy Raw Text
+            </button>
+          </div>
+
+          <pre
+            style={{
+              background: "#0f172a",
+              color: "#f8fafc",
+              padding: 20,
+              borderRadius: 8,
+              fontSize: 13,
+              lineHeight: 1.6,
+              fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              maxHeight: 650,
+              overflowY: "auto",
+            }}
+          >
+            {data.raw_text || "No raw text extracted for this document."}
+          </pre>
+        </div>
+      )}
+
+      {/* =========================================================================
+          TAB 3: DOCUMENT HISTORY & AUDIT TRAIL (Matches Image 5)
          ========================================================================= */}
       {tab === "history" && (
         <div className="card" style={{ padding: 24 }}>

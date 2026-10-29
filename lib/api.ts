@@ -6,6 +6,20 @@ const API_HOST = typeof window !== "undefined"
   ? (process.env.NEXT_PUBLIC_API_URL || "")
   : (process.env.NEXT_PUBLIC_API_URL || process.env.BACKEND_URL || "");
 const BASE = API_HOST ? `${API_HOST.replace(/\/$/, "")}/api` : "/api";
+
+export const OCR_HOST = typeof window !== "undefined"
+  ? (process.env.NEXT_PUBLIC_OCR_URL || "https://task-ocr-model.onrender.com")
+  : (process.env.NEXT_PUBLIC_OCR_URL || "https://task-ocr-model.onrender.com");
+
+export async function pingOcrService(): Promise<boolean> {
+  try {
+    const res = await fetch(`${OCR_HOST}/health`, { method: "GET", cache: "no-store" });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 const TOKEN_KEY = "docuintel_jwt_token";
 
 export function getStoredToken(): string | null {

@@ -18,11 +18,10 @@ const MODES: [Mode, string, string][] = [
 ];
 
 const EXAMPLE_QUERIES = [
-  "Find invoices from supplier HellasFresh above €1,000",
-  "Find invoices from supplier ABC above ৳50,000",
+  "Find invoices above $1,000",
   "Show invoices with tax discrepancies",
-  "Find invoices that do not have a matching spreadsheet record",
-  "Cloud infrastructure & data integration",
+  "Find invoices requiring review",
+  "Cloud infrastructure & software services",
 ];
 
 export default function SearchPage() {
@@ -202,7 +201,7 @@ export default function SearchPage() {
                   ? "Ask any question (e.g. How much did we spend on cloud services? What tax issues occurred?)"
                   : mode === "filters"
                   ? "Optional text filter..."
-                  : "e.g. Find invoices from supplier HellasFresh above €1,000"
+                  : "e.g. Find invoices above $1,000"
               }
               value={q}
               onChange={(e) => setQ(e.target.value)}

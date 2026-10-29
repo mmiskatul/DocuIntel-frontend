@@ -98,14 +98,6 @@ export default function DocumentsDashboard() {
     }
   };
 
-  const handleBatchCompare = () => {
-    if (!selectedIds.length) {
-      router.push("/reconcile");
-      return;
-    }
-    router.push(`/reconcile?docs=${selectedIds.join(",")}`);
-  };
-
   const handleBatchDelete = async () => {
     if (!selectedIds.length) return;
     if (!confirm(`Delete ${selectedIds.length} document(s)?`)) return;
@@ -166,13 +158,10 @@ export default function DocumentsDashboard() {
         <div>
           <h1>Document Intelligence</h1>
           <p className="muted" style={{ margin: "4px 0 0" }}>
-            Upload invoices, receipts, and purchase orders. AI automatically extracts line items, validates totals, and reconciles discrepancies.
+            Upload invoices, receipts, and documents. AI automatically extracts line items, validates totals, and flags discrepancies.
           </p>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
-          <Link href="/reconcile" className="btn">
-            ⚖️ Reconciliation
-          </Link>
           <Link href="/search" className="btn btn-primary">
             🔍 AI Search
           </Link>
@@ -257,13 +246,6 @@ export default function DocumentsDashboard() {
             </span>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button
-              onClick={handleBatchCompare}
-              className="btn btn-sm"
-              style={{ background: "#ffffff", color: "#0f172a", border: "none" }}
-            >
-              ⚖️ Compare Selected
-            </button>
             <button
               onClick={handleBatchApprove}
               disabled={isBatchBusy}

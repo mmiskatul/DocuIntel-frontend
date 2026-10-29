@@ -10,10 +10,16 @@ export function Nav() {
   const [apiOnline, setApiOnline] = useState<boolean | null>(null);
 
   useEffect(() => {
-    // Check backend health on mount
-    api.stats()
-      .then(() => setApiOnline(true))
-      .catch(() => setApiOnline(false));
+    // Check unified FastAPI backend status on mount & keep awake
+    const checkStatus = () => {
+      api.stats()
+        .then(() => setApiOnline(true))
+        .catch(() => setApiOnline(false));
+    };
+
+    checkStatus();
+    const interval = setInterval(checkStatus, 45000);
+    return () => clearInterval(interval);
   }, []);
 
   const link = (href: string, label: string, active: boolean) => (
@@ -37,30 +43,29 @@ export function Nav() {
             background: "var(--primary-soft)",
             color: "var(--primary)"
           }}>
-            AI OCR
+            AI OCR &amp; RAG
           </span>
         </Link>
 
         <nav className="nav">
-          {link("/", "📄 Documents", path === "/" || (path.startsWith("/documents") && !path.startsWith("/reconcile")))}
-          {link("/reconcile", "⚖️ Reconciliation", path.startsWith("/reconcile"))}
+          {link("/", "📄 Documents", path === "/" || path.startsWith("/documents"))}
           {link("/search", "🔍 AI Search", path.startsWith("/search"))}
         </nav>
 
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "12px" }}>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "10px" }}>
           <div
-            title={apiOnline === true ? "Connected to live NestJS & AI OCR backend" : apiOnline === false ? "Connecting to backend..." : "Checking backend status..."}
+            title={apiOnline === true ? "FastAPI & Supabase backend is connected" : "Connecting to backend..."}
             style={{
               display: "flex",
               alignItems: "center",
               gap: "6px",
               fontSize: "12px",
               fontWeight: 500,
-              padding: "4px 10px",
+              padding: "4px 11px",
               borderRadius: "20px",
-              background: apiOnline === true ? "#ecfdf5" : "#f1f5f9",
-              color: apiOnline === true ? "#059669" : "#64748b",
-              border: `1px solid ${apiOnline === true ? "#a7f3d0" : "#e2e8f0"}`,
+              background: apiOnline === true ? "#ecfdf5" : apiOnline === false ? "#fffbeb" : "#f1f5f9",
+              color: apiOnline === true ? "#059669" : apiOnline === false ? "#b45309" : "#64748b",
+              border: `1px solid ${apiOnline === true ? "#a7f3d0" : apiOnline === false ? "#fde68a" : "#e2e8f0"}`,
             }}
           >
             <span
@@ -68,7 +73,7 @@ export function Nav() {
                 width: 7,
                 height: 7,
                 borderRadius: "50%",
-                background: apiOnline === true ? "#10b981" : "#94a3b8",
+                background: apiOnline === true ? "#10b981" : apiOnline === false ? "#f59e0b" : "#94a3b8",
               }}
             />
             {apiOnline === true ? "API Connected" : apiOnline === false ? "Connecting..." : "Checking..."}
