@@ -2,7 +2,10 @@ import type {
   DocFilters, DocumentOut, EventOut, InvoiceData, PageOut, ResultOut, SearchHit, Stats, UploadItem,
 } from "./types";
 
-const BASE = "/api";
+const API_HOST = typeof window !== "undefined"
+  ? (process.env.NEXT_PUBLIC_API_URL || "")
+  : (process.env.NEXT_PUBLIC_API_URL || process.env.BACKEND_URL || "");
+const BASE = API_HOST ? `${API_HOST.replace(/\/$/, "")}/api` : "/api";
 const TOKEN_KEY = "docuintel_jwt_token";
 
 export function getStoredToken(): string | null {

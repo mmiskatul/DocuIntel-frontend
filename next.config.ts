@@ -15,6 +15,18 @@ const config: NextConfig = {
       },
     ];
   },
+  async rewrites() {
+    const backendUrl =
+      process.env.NEXT_PUBLIC_API_URL ||
+      process.env.BACKEND_URL ||
+      "https://task-backend-zgmc.onrender.com";
+    return [
+      {
+        source: "/api/:path*",
+        destination: `${backendUrl.replace(/\/$/, "")}/api/:path*`,
+      },
+    ];
+  },
 };
 
 export default config;
