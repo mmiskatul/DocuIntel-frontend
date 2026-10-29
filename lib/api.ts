@@ -148,7 +148,8 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ document_ids: docIds, reviewer }),
     }),
-  seedDemoData: () => request<{ success: boolean; message: string }>("/documents/seed", { method: "POST" }),
+  deleteAllDocuments: () =>
+    request<{ success: boolean }>("/documents", { method: "DELETE" }),
   getHistory: (id: string) => request<any[]>(`/documents/${id}/history`),
   wakeup: () => request<{ status: string; backend: string; ocr_model: any }>("/wakeup"),
   health: () => request<any>("/health"),

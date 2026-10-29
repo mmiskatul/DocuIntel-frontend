@@ -106,6 +106,28 @@ export default function DocumentsDashboard() {
     router.push(`/reconcile?docs=${selectedIds.join(",")}`);
   };
 
+  const handleBatchDelete = async () => {
+    if (!selectedIds.length) return;
+    if (!confirm(`Delete ${selectedIds.length} document(s)?`)) return;
+    setIsBatchBusy(true);
+    try {
+      for (const id of selectedIds) {
+        await api.deleteDocument(id);
+      }
+      setNotice({
+        type: "success",
+        text: `Deleted ${selectedIds.length} document(s).`,
+      });
+      setSelectedIds([]);
+      void docs.refresh();
+      void stats.refresh();
+    } catch (err: any) {
+      setNotice({ type: "error", text: `Delete failed: ${err.message}` });
+    } finally {
+      setIsBatchBusy(false);
+    }
+  };
+
   const handleExportCSV = () => {
     const targetDocs = selectedIds.length
       ? rawList.filter((d) => selectedIds.includes(d.id))
@@ -258,6 +280,14 @@ export default function DocumentsDashboard() {
               📥 Export CSV
             </button>
             <button
+              onClick={handleBatchDelete}
+              disabled={isBatchBusy}
+              className="btn btn-sm"
+              style={{ background: "var(--red)", color: "#ffffff", border: "none" }}
+            >
+              🗑️ Delete Selected
+            </button>
+            <button
               onClick={() => setSelectedIds([])}
               className="btn btn-sm"
               style={{ background: "transparent", color: "#94a3b8", border: "1px solid #475569" }}
@@ -327,19 +357,37 @@ export default function DocumentsDashboard() {
             selectedIds={selectedIds}
             onToggleSelect={toggleSelect}
             onSelectAll={selectAll}
-            extra={(d) =>
-              d.status === "failed" ? (
+            extra={(d) => (
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                {d.status === "failed" && (
+                  <button
+                    onClick={async () => {
+                      await api.reprocess(d.id);
+                      void docs.refresh();
+                    }}
+                    className="btn btn-sm btn-danger"
+                  >
+                    Retry
+                  </button>
+                )}
                 <button
-                  onClick={async () => {
-                    await api.reprocess(d.id);
-                    void docs.refresh();
+                  type="button"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    if (confirm(`Delete ${d.filename}?`)) {
+                      await api.deleteDocument(d.id);
+                      void docs.refresh();
+                      void stats.refresh();
+                    }
                   }}
-                  className="btn btn-sm btn-danger"
+                  className="btn btn-sm"
+                  style={{ color: "var(--red)", borderColor: "#fecaca", padding: "2px 7px", fontSize: 11 }}
+                  title="Delete document"
                 >
-                  Retry
+                  ✕
                 </button>
-              ) : null
-            }
+              </div>
+            )}
           />
         )}
       </div>
