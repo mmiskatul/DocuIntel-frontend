@@ -8,7 +8,7 @@ import type { NextRequest } from "next/server";
  */
 export const dynamic = "force-dynamic";
 
-const BACKEND = (process.env.BACKEND_URL ?? "http://localhost:8000").replace(/\/$/, "");
+const BACKEND = (process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "https://docuintel-backend-wpio.onrender.com").replace(/\/$/, "");
 const PASS_THROUGH = ["content-type", "content-disposition", "content-length", "retry-after"];
 
 async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }): Promise<Response> {

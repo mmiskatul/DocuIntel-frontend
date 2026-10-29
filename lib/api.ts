@@ -3,9 +3,9 @@ import type {
 } from "./types";
 
 const API_HOST = typeof window !== "undefined"
-  ? (process.env.NEXT_PUBLIC_API_URL || "")
-  : (process.env.NEXT_PUBLIC_API_URL || process.env.BACKEND_URL || "");
-const BASE = API_HOST ? `${API_HOST.replace(/\/$/, "")}/api` : "/api";
+  ? (process.env.NEXT_PUBLIC_API_URL || "https://docuintel-backend-wpio.onrender.com")
+  : (process.env.NEXT_PUBLIC_API_URL || process.env.BACKEND_URL || "https://docuintel-backend-wpio.onrender.com");
+const BASE = API_HOST ? `${API_HOST.replace(/\/$/, "")}/api` : "https://docuintel-backend-wpio.onrender.com/api";
 
 export const OCR_HOST = typeof window !== "undefined"
   ? (process.env.NEXT_PUBLIC_OCR_URL || "https://task-ocr-model.onrender.com")
@@ -135,26 +135,6 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reviewer }),
-    }),
-  reconcile: (sourceIds: string[] = []) =>
-    request<{
-      summary: { total_sources: number; total_transactions: number; matched_count: number; flagged_count: number; unexplained_difference: number; period: string };
-      sources: Array<{ id: string; filename: string; type: string; count: number; status: string }>;
-      discrepancies: Array<{
-        id: string;
-        transaction: string;
-        ledger_amount: number | null;
-        bank_amount: number | null;
-        ledger_date?: string;
-        bank_date?: string;
-        flag_type: "UNMATCHED" | "DUPLICATE" | "TIMING DIFF" | "MISSING RECEIPT";
-        difference: number;
-        notes: string;
-      }>;
-    }>("/reconcile", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ source_ids: sourceIds }),
     }),
   batchApprove: (docIds: string[], reviewer?: string) =>
     request<{ count: number; results: any[] }>("/documents/batch-approve", {

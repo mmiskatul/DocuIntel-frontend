@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { money } from "@/lib/format";
 import type { DocumentOut } from "@/lib/types";
 
@@ -9,6 +8,7 @@ interface DocTableProps {
   selectedIds?: string[];
   onToggleSelect?: (id: string) => void;
   onSelectAll?: () => void;
+  onViewDoc?: (d: DocumentOut) => void;
   extra?: (d: DocumentOut) => React.ReactNode;
 }
 
@@ -17,37 +17,47 @@ export function DocTable({
   selectedIds = [],
   onToggleSelect,
   onSelectAll,
+  onViewDoc,
   extra,
 }: DocTableProps) {
   if (!docs.length) {
-    return <div className="empty" style={{ padding: "40px 20px" }}>No documents found matching the selected criteria.</div>;
+    return (
+      <div className="empty" style={{ padding: "48px 20px", textAlign: "center" }}>
+        <div style={{ fontSize: 32, marginBottom: 8 }}>📭</div>
+        <div style={{ fontWeight: 600, color: "#1e293b", fontSize: 16 }}>No documents found</div>
+        <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>
+          Upload invoices or documents above to start processing with AI OCR &amp; RAG.
+        </div>
+      </div>
+    );
   }
 
   const allSelected = docs.length > 0 && docs.every((d) => selectedIds.includes(d.id));
   const someSelected = docs.some((d) => selectedIds.includes(d.id)) && !allSelected;
 
   const getDocType = (d: DocumentOut) => {
-    if (d.filename.toUpperCase().startsWith("PO")) return "Purchase Order";
-    if (d.filename.toLowerCase().includes("statement")) return "Bank Statement";
-    if (d.filename.toLowerCase().includes("ledger")) return "Ledger";
-    if (d.filename.toLowerCase().includes("receipt")) return "Receipt";
+    const fn = (d.filename || "").toLowerCase();
+    if (fn.startsWith("po") || fn.includes("purchase")) return "Purchase Order";
+    if (fn.includes("statement")) return "Bank Statement";
+    if (fn.includes("receipt")) return "Receipt";
     return "Invoice";
   };
 
   const getFormattedDate = (d: DocumentOut) => {
-    if (d.summary.invoice_date) {
-      const parts = d.summary.invoice_date.split("-");
-      if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    if (d.summary?.invoice_date) {
       return d.summary.invoice_date;
     }
-    const dt = new Date(d.created_at);
-    return `${String(dt.getDate()).padStart(2, "0")}/${String(dt.getMonth() + 1).padStart(2, "0")}/${dt.getFullYear()}`;
+    if (d.created_at) {
+      const dt = new Date(d.created_at);
+      return `${String(dt.getDate()).padStart(2, "0")}/${String(dt.getMonth() + 1).padStart(2, "0")}/${dt.getFullYear()}`;
+    }
+    return "—";
   };
 
   const getConfidenceLevel = (d: DocumentOut): { label: "High" | "Medium" | "Low"; bg: string; color: string } => {
     if (d.status === "failed") return { label: "Low", bg: "#fce8e6", color: "#c4261d" };
     if (d.status === "needs_review") return { label: "Medium", bg: "#fef9c3", color: "#854d0e" };
-    if (d.status === "processing") return { label: "Medium", bg: "#fef9c3", color: "#854d0e" };
+    if (d.status === "processing") return { label: "Medium", bg: "#eff6ff", color: "#1d4ed8" };
     return { label: "High", bg: "#dcfce7", color: "#15803d" };
   };
 
@@ -81,7 +91,7 @@ export function DocTable({
                 animation: "spin 1s linear infinite",
               }}
             />
-            Processing
+            {d.stage || "Processing"}
           </span>
         );
       case "completed":
@@ -100,10 +110,7 @@ export function DocTable({
               fontWeight: 600,
             }}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-            Completed
+            ✓ Completed
           </span>
         );
       case "needs_review":
@@ -122,12 +129,7 @@ export function DocTable({
               fontWeight: 600,
             }}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-            Needs Review
+            ⚠ Needs Review
           </span>
         );
       case "failed":
@@ -146,12 +148,7 @@ export function DocTable({
               fontWeight: 600,
             }}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-            Error
+            ✕ Failed
           </span>
         );
     }
@@ -189,7 +186,7 @@ export function DocTable({
             <th style={{ padding: "12px 14px", color: "#64748b", fontWeight: 600, fontSize: 12 }}>Amount</th>
             <th style={{ padding: "12px 14px", color: "#64748b", fontWeight: 600, fontSize: 12 }}>Status</th>
             <th style={{ padding: "12px 14px", color: "#64748b", fontWeight: 600, fontSize: 12 }}>Confidence</th>
-            {extra && <th style={{ width: 80 }} />}
+            <th style={{ width: 130, textAlign: "right", padding: "12px 14px", color: "#64748b", fontWeight: 600, fontSize: 12 }}>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -217,18 +214,24 @@ export function DocTable({
                   </td>
                 )}
                 <td style={{ padding: "12px 14px" }}>
-                  <Link
-                    href={`/documents/${d.id}`}
+                  <button
+                    type="button"
+                    onClick={() => onViewDoc?.(d)}
                     style={{
-                      color: "#1e293b",
+                      background: "none",
+                      border: "none",
+                      padding: 0,
+                      textAlign: "left",
+                      color: "#0b63b8",
                       fontWeight: 600,
-                      textDecoration: "none",
+                      fontSize: 13.5,
+                      cursor: "pointer",
                       display: "block",
                       lineHeight: 1.3,
                     }}
                   >
                     {d.filename}
-                  </Link>
+                  </button>
                   {d.error && d.status === "failed" && (
                     <div style={{ color: "#b91c1c", fontSize: 11, marginTop: 3, maxWidth: 300 }}>
                       {d.error.slice(0, 90)}...
@@ -239,13 +242,13 @@ export function DocTable({
                   {getDocType(d)}
                 </td>
                 <td style={{ padding: "12px 14px", color: "#1e293b", fontWeight: 500, fontSize: 13 }}>
-                  {d.summary.supplier_name || "—"}
+                  {d.summary?.supplier_name || "—"}
                 </td>
                 <td style={{ padding: "12px 14px", color: "#64748b", fontSize: 13 }}>
                   {getFormattedDate(d)}
                 </td>
                 <td style={{ padding: "12px 14px", color: "#0f172a", fontWeight: 600, fontSize: 13 }}>
-                  {money(d.summary.total, d.summary.currency || (d.filename.includes("0417") ? "USD" : "EUR"))}
+                  {money(d.summary?.total, d.summary?.currency || "USD")}
                 </td>
                 <td style={{ padding: "12px 14px" }}>
                   {getStatusBadge(d)}
@@ -265,11 +268,20 @@ export function DocTable({
                     {conf.label}
                   </span>
                 </td>
-                {extra && (
-                  <td style={{ padding: "12px 14px", textAlign: "right" }}>
-                    {extra(d)}
-                  </td>
-                )}
+                <td style={{ padding: "12px 14px", textAlign: "right" }}>
+                  <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
+                    <button
+                      type="button"
+                      onClick={() => onViewDoc?.(d)}
+                      className="btn btn-sm"
+                      style={{ padding: "3px 8px", fontSize: 11.5 }}
+                      title="Inspect extracted fields and preview"
+                    >
+                      View
+                    </button>
+                    {extra && extra(d)}
+                  </div>
+                </td>
               </tr>
             );
           })}

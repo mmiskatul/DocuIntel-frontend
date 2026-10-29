@@ -1,24 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { DocTable } from "@/components/DocTable";
+import { DocModal } from "@/components/DocModal";
 import { UploadZone } from "@/components/UploadZone";
 import { api } from "@/lib/api";
-import { money } from "@/lib/format";
 import { IN_FLIGHT, type DocumentOut } from "@/lib/types";
 import { usePolling } from "@/lib/usePolling";
 
 export default function DocumentsDashboard() {
-  const router = useRouter();
-
   // Filters & Search
   const [statusFilter, setStatusFilter] = useState<string>("All");
   const [typeFilter, setTypeFilter] = useState<string>("All");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
-  // Document selection state
+  // Document modal & selection state
+  const [selectedDoc, setSelectedDoc] = useState<DocumentOut | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [notice, setNotice] = useState<{ type: "success" | "info" | "error"; text: string } | null>(null);
   const [isBatchBusy, setIsBatchBusy] = useState<boolean>(false);
@@ -26,7 +24,7 @@ export default function DocumentsDashboard() {
   // Live polling of documents and statistics
   const docs = usePolling<DocumentOut[]>(
     () => api.listDocuments({ q: searchQuery || undefined }),
-    (d) => (d?.some((x) => IN_FLIGHT.includes(x.status)) ? 1500 : 6000),
+    (d) => (d?.some((x) => IN_FLIGHT.includes(x.status)) ? 1500 : 5000),
     [searchQuery],
   );
   const stats = usePolling(() => api.stats(), () => 5000);
@@ -46,7 +44,7 @@ export default function DocumentsDashboard() {
 
       // Document Type filter
       if (typeFilter !== "All") {
-        const isPO = d.filename.toUpperCase().startsWith("PO");
+        const isPO = (d.filename || "").toUpperCase().startsWith("PO");
         if (typeFilter === "Invoice" && isPO) return false;
         if (typeFilter === "Purchase Order" && !isPO) return false;
       }
@@ -54,9 +52,9 @@ export default function DocumentsDashboard() {
       // Search Query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const fn = d.filename.toLowerCase();
-        const supp = (d.summary.supplier_name || "").toLowerCase();
-        const inv = (d.summary.invoice_number || "").toLowerCase();
+        const fn = (d.filename || "").toLowerCase();
+        const supp = (d.summary?.supplier_name || "").toLowerCase();
+        const inv = (d.summary?.invoice_number || "").toLowerCase();
         if (!fn.includes(q) && !supp.includes(q) && !inv.includes(q)) return false;
       }
 
@@ -91,6 +89,7 @@ export default function DocumentsDashboard() {
       });
       setSelectedIds([]);
       void docs.refresh();
+      void stats.refresh();
     } catch (err: any) {
       setNotice({ type: "error", text: `Batch approval failed: ${err.message}` });
     } finally {
@@ -100,7 +99,7 @@ export default function DocumentsDashboard() {
 
   const handleBatchDelete = async () => {
     if (!selectedIds.length) return;
-    if (!confirm(`Delete ${selectedIds.length} document(s)?`)) return;
+    if (!confirm(`Permanently delete ${selectedIds.length} document(s)?`)) return;
     setIsBatchBusy(true);
     try {
       for (const id of selectedIds) {
@@ -125,15 +124,17 @@ export default function DocumentsDashboard() {
       ? rawList.filter((d) => selectedIds.includes(d.id))
       : rawList;
 
+    if (!targetDocs.length) return;
+
     const headers = ["Document ID", "Filename", "Type", "Vendor", "Date", "Amount", "Currency", "Status"];
     const rows = targetDocs.map((d) => [
       `"${d.id}"`,
       `"${d.filename}"`,
-      `"${d.filename.toUpperCase().startsWith("PO") ? "Purchase Order" : "Invoice"}"`,
-      `"${d.summary.supplier_name || "—"}"`,
-      `"${d.summary.invoice_date || d.created_at.slice(0, 10)}"`,
-      d.summary.total ?? 0,
-      `"${d.summary.currency || "EUR"}"`,
+      `"${(d.filename || "").toUpperCase().startsWith("PO") ? "Purchase Order" : "Invoice"}"`,
+      `"${d.summary?.supplier_name || "—"}"`,
+      `"${d.summary?.invoice_date || d.created_at?.slice(0, 10) || ""}"`,
+      d.summary?.total ?? 0,
+      `"${d.summary?.currency || "USD"}"`,
       `"${d.status}"`,
     ]);
 
@@ -152,18 +153,18 @@ export default function DocumentsDashboard() {
   };
 
   return (
-    <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+    <div style={{ maxWidth: 1100, margin: "0 auto", paddingBottom: 60 }}>
       {/* Page Header */}
       <div className="page-head">
         <div>
           <h1>Document Intelligence</h1>
           <p className="muted" style={{ margin: "4px 0 0" }}>
-            Upload invoices, receipts, and documents. AI automatically extracts line items, validates totals, and flags discrepancies.
+            Upload invoices and PDFs. LangChain extracts structured line items, calculates totals, and indexes vector embeddings.
           </p>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <Link href="/search" className="btn btn-primary">
-            🔍 AI Search
+            🔍 AI Search &amp; RAG
           </Link>
         </div>
       </div>
@@ -197,13 +198,13 @@ export default function DocumentsDashboard() {
       {/* Upload Zone Card */}
       <div className="card" style={{ marginBottom: 24 }}>
         <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>
-          📤 Upload Invoices & Documents
+          📤 Upload Invoices &amp; Documents
         </h2>
         <UploadZone
           onUploaded={() => {
             void docs.refresh();
             void stats.refresh();
-            setNotice({ type: "success", text: "Files uploaded! Processing pipeline started." });
+            setNotice({ type: "success", text: "Files uploaded! LangChain OCR and extraction pipeline running in background." });
           }}
         />
       </div>
@@ -212,7 +213,7 @@ export default function DocumentsDashboard() {
       {notice && (
         <div
           className={`alert ${notice.type === "success" ? "alert-ok" : notice.type === "error" ? "alert-error" : "alert-info"}`}
-          style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+          style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}
         >
           <span>{notice.text}</span>
           <button
@@ -224,7 +225,7 @@ export default function DocumentsDashboard() {
         </div>
       )}
 
-      {/* Batch Action Toolbar (Appears when documents are checked) */}
+      {/* Batch Action Toolbar */}
       {selectedIds.length > 0 && (
         <div
           style={{
@@ -332,13 +333,14 @@ export default function DocumentsDashboard() {
 
         {/* Documents Table */}
         {docs.loading && !docs.data ? (
-          <div className="empty">Loading documents...</div>
+          <div className="empty" style={{ padding: "30px" }}>Loading documents...</div>
         ) : (
           <DocTable
             docs={filteredList}
             selectedIds={selectedIds}
             onToggleSelect={toggleSelect}
             onSelectAll={selectAll}
+            onViewDoc={(d) => setSelectedDoc(d)}
             extra={(d) => (
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 {d.status === "failed" && (
@@ -356,7 +358,7 @@ export default function DocumentsDashboard() {
                   type="button"
                   onClick={async (e) => {
                     e.stopPropagation();
-                    if (confirm(`Delete ${d.filename}?`)) {
+                    if (confirm(`Permanently delete ${d.filename}?`)) {
                       await api.deleteDocument(d.id);
                       void docs.refresh();
                       void stats.refresh();
@@ -373,6 +375,18 @@ export default function DocumentsDashboard() {
           />
         )}
       </div>
+
+      {/* Document Detail & Preview Modal */}
+      {selectedDoc && (
+        <DocModal
+          doc={selectedDoc}
+          onClose={() => setSelectedDoc(null)}
+          onDeleted={() => {
+            void docs.refresh();
+            void stats.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }
