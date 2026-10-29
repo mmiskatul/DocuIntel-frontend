@@ -2,30 +2,46 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { DocTable } from "@/components/DocTable";
-import { DocModal } from "@/components/DocModal";
 import { UploadZone } from "@/components/UploadZone";
 import { api } from "@/lib/api";
 import { IN_FLIGHT, type DocumentOut } from "@/lib/types";
 import { usePolling } from "@/lib/usePolling";
+import { useAppDispatch, useAppSelector } from "@/store";
+import {
+  fetchDocuments,
+  fetchStats,
+  setStatusFilter,
+  setTypeFilter,
+  setSearchQuery,
+  setPage,
+  toggleSelectId,
+  selectAllIds,
+  deleteDocument,
+} from "@/store/documentsSlice";
 
 export default function DocumentsDashboard() {
   const router = useRouter();
+  const dispatch = useAppDispatch();
 
-  // Filters & Search
-  const [statusFilter, setStatusFilter] = useState<string>("All");
-  const [typeFilter, setTypeFilter] = useState<string>("All");
-  const [searchQuery, setSearchQuery] = useState<string>("");
+  // Redux Global State
+  const {
+    statusFilter,
+    typeFilter,
+    searchQuery,
+    page,
+    pageSize,
+    selectedIds,
+  } = useAppSelector((state) => state.documents);
 
-  // Modal & Selection state
-  const [selectedDoc, setSelectedDoc] = useState<DocumentOut | null>(null);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [notice, setNotice] = useState<{ type: "success" | "info" | "error"; text: string } | null>(null);
 
-  // Pagination state
-  const [page, setPage] = useState<number>(1);
-  const pageSize = 8;
+  // Initial fetch into Redux
+  useEffect(() => {
+    dispatch(fetchDocuments());
+    dispatch(fetchStats());
+  }, [dispatch]);
 
   // Live polling of documents and stats
   const docs = usePolling<DocumentOut[]>(
@@ -73,22 +89,20 @@ export default function DocumentsDashboard() {
   const paginatedList = useMemo(() => {
     const start = (page - 1) * pageSize;
     return filteredList.slice(start, start + pageSize);
-  }, [filteredList, page]);
+  }, [filteredList, page, pageSize]);
 
   const totalPages = Math.max(1, Math.ceil(filteredList.length / pageSize));
 
-  // Selection handlers
+  // Selection handlers via Redux
   const toggleSelect = (id: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
-    );
+    dispatch(toggleSelectId(id));
   };
 
   const selectAll = () => {
     if (selectedIds.length === paginatedList.length) {
-      setSelectedIds([]);
+      dispatch(selectAllIds([]));
     } else {
-      setSelectedIds(paginatedList.map((d) => d.id));
+      dispatch(selectAllIds(paginatedList.map((d) => d.id)));
     }
   };
 
@@ -124,7 +138,7 @@ export default function DocumentsDashboard() {
   const handleDelete = async (d: DocumentOut) => {
     if (confirm(`Permanently delete ${d.filename}?`)) {
       try {
-        await api.deleteDocument(d.id);
+        await dispatch(deleteDocument(d.id)).unwrap();
         void docs.refresh();
         void stats.refresh();
         setNotice({ type: "success", text: `Deleted ${d.filename}.` });
@@ -453,7 +467,7 @@ export default function DocumentsDashboard() {
             type="text"
             placeholder="Search documents, vendors, or invoice #..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => dispatch(setSearchQuery(e.target.value))}
             style={{
               paddingLeft: 36,
               height: 38,
@@ -470,7 +484,7 @@ export default function DocumentsDashboard() {
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <button
             type="button"
-            onClick={() => setStatusFilter("All")}
+            onClick={() => dispatch(setStatusFilter("All"))}
             style={{
               height: 36,
               padding: "0 14px",
@@ -492,7 +506,7 @@ export default function DocumentsDashboard() {
 
           <button
             type="button"
-            onClick={() => setStatusFilter("Needs Review")}
+            onClick={() => dispatch(setStatusFilter("Needs Review"))}
             style={{
               height: 36,
               padding: "0 14px",
@@ -516,7 +530,7 @@ export default function DocumentsDashboard() {
 
           <button
             type="button"
-            onClick={() => setStatusFilter("Completed")}
+            onClick={() => dispatch(setStatusFilter("Completed"))}
             style={{
               height: 36,
               padding: "0 14px",
@@ -534,7 +548,7 @@ export default function DocumentsDashboard() {
 
           <button
             type="button"
-            onClick={() => setStatusFilter("Processing")}
+            onClick={() => dispatch(setStatusFilter("Processing"))}
             style={{
               height: 36,
               padding: "0 14px",
@@ -552,7 +566,7 @@ export default function DocumentsDashboard() {
 
           <button
             type="button"
-            onClick={() => setStatusFilter("Failed")}
+            onClick={() => dispatch(setStatusFilter("Failed"))}
             style={{
               height: 36,
               padding: "0 14px",
@@ -565,7 +579,7 @@ export default function DocumentsDashboard() {
               color: statusFilter === "Failed" ? "#ffffff" : "#475569",
             }}
           >
-            Failed
+            Failed / Rejected
           </button>
         </div>
 
@@ -573,7 +587,7 @@ export default function DocumentsDashboard() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <select
             value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
+            onChange={(e) => dispatch(setTypeFilter(e.target.value))}
             style={{
               height: 36,
               fontSize: 12.5,
@@ -689,7 +703,7 @@ export default function DocumentsDashboard() {
             <button
               type="button"
               disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              onClick={() => dispatch(setPage(Math.max(1, page - 1)))}
               style={{
                 padding: "5px 12px",
                 borderRadius: 6,
@@ -708,7 +722,7 @@ export default function DocumentsDashboard() {
               <button
                 key={num}
                 type="button"
-                onClick={() => setPage(num)}
+                onClick={() => dispatch(setPage(num))}
                 style={{
                   width: 30,
                   height: 30,
@@ -751,7 +765,7 @@ export default function DocumentsDashboard() {
             <button
               type="button"
               disabled={page >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              onClick={() => dispatch(setPage(Math.min(totalPages, page + 1)))}
               style={{
                 padding: "5px 12px",
                 borderRadius: 6,

@@ -1,16 +1,24 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { DocTable } from "@/components/DocTable";
-import { DocModal } from "@/components/DocModal";
 import { StatusBadge } from "@/components/StatusBadge";
-import { api } from "@/lib/api";
 import { money } from "@/lib/format";
-import type { DocFilters, DocumentOut, RAGResult, SearchHit } from "@/lib/types";
+import type { DocFilters, SearchHit } from "@/lib/types";
+import { useAppDispatch, useAppSelector } from "@/store";
+import {
+  setQuery,
+  setMode,
+  runSearch,
+  runRagQuery,
+  runFilterSearch,
+  clearSearch,
+  type SearchMode,
+} from "@/store/searchSlice";
 
-type Mode = "rag" | "hybrid" | "filters";
-const MODES: [Mode, string, string][] = [
+const MODES: [SearchMode, string, string][] = [
   ["rag", "⚡ AI Document Analyst", "Semantic vector retrieval + answering with citations"],
   ["hybrid", "🔍 Smart Search", "Semantic vector embeddings + keyword matching"],
   ["filters", "📊 Structured Filters", "Filter by supplier, date range, and amount"],
@@ -24,37 +32,38 @@ const EXAMPLE_QUERIES = [
 ];
 
 export default function SearchPage() {
-  const [mode, setMode] = useState<Mode>("rag");
-  const [q, setQ] = useState("");
+  const router = useRouter();
+  const dispatch = useAppDispatch();
+
+  // Redux state
+  const {
+    query: q,
+    mode,
+    hits,
+    docs,
+    ragResult,
+    loading,
+    ragLoading,
+    error: reduxError,
+  } = useAppSelector((state) => state.search);
+
+  // Local filter fields for "filters" mode
   const [f, setF] = useState<Record<string, string>>({});
   const [needsReview, setNeedsReview] = useState(false);
-  const [hits, setHits] = useState<SearchHit[] | null>(null);
-  const [docs, setDocs] = useState<DocumentOut[] | null>(null);
-  const [ragResult, setRagResult] = useState<RAGResult | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [activeQueryInfo, setActiveQueryInfo] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
 
-  // Document inspection modal state
-  const [inspectDoc, setInspectDoc] = useState<DocumentOut | null>(null);
+  const busy = loading || ragLoading;
+  const error = localError || reduxError;
 
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }));
 
-  async function openDocById(docId: string) {
-    try {
-      const d = await api.getDocument(docId);
-      setInspectDoc(d);
-    } catch (err: any) {
-      alert(`Could not load document: ${err.message}`);
-    }
+  function navigateToDoc(docId: string) {
+    router.push(`/documents/${docId}`);
   }
 
   async function executeSearch(queryText: string, searchMode = mode) {
-    setBusy(true);
-    setError(null);
-    setHits(null);
-    setDocs(null);
-    setRagResult(null);
+    setLocalError(null);
     setActiveQueryInfo(null);
 
     try {
@@ -70,30 +79,32 @@ export default function SearchPage() {
           max_total: f.max_total ? Number(f.max_total) : undefined,
           needs_review: needsReview || undefined,
         };
-        const results = await api.listDocuments(filters);
-        setDocs(results);
+        await dispatch(runFilterSearch(filters)).unwrap();
       } else if (searchMode === "rag") {
         if (!queryText.trim()) {
-          setError("Please enter a question to ask the AI Assistant.");
+          setLocalError("Please enter a question to ask the AI Assistant.");
           return;
         }
-        setActiveQueryInfo("Analyzing documents and synthesizing answer...");
-        const rag = await api.ragSearch(queryText.trim());
-        setRagResult(rag);
-        setHits(rag.hits || []);
+        setActiveQueryInfo("Analyzing vector embeddings and synthesizing answer...");
+        await dispatch(runRagQuery({ q: queryText.trim() })).unwrap();
+        setActiveQueryInfo(null);
       } else {
         if (!queryText.trim()) {
-          setError("Please enter a search query or select an example prompt below.");
+          setLocalError("Please enter a search query or select an example prompt below.");
           return;
         }
-        setActiveQueryInfo("Searching document repository...");
-        const results = await api.search(queryText.trim(), searchMode);
-        setHits(results);
+        setActiveQueryInfo("Searching vector repository...");
+        await dispatch(
+          runSearch({
+            q: queryText.trim(),
+            mode: searchMode === "semantic" || searchMode === "keyword" ? searchMode : "hybrid",
+          })
+        ).unwrap();
+        setActiveQueryInfo(null);
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Search query failed");
-    } finally {
-      setBusy(false);
+    } catch (err: any) {
+      setLocalError(err.message || "Search query failed");
+      setActiveQueryInfo(null);
     }
   }
 
@@ -103,8 +114,8 @@ export default function SearchPage() {
   }
 
   function handleExampleClick(query: string) {
-    setQ(query);
-    setMode("rag");
+    dispatch(setQuery(query));
+    dispatch(setMode("rag"));
     void executeSearch(query, "rag");
   }
 
@@ -157,8 +168,10 @@ export default function SearchPage() {
       {/* Page Header */}
       <div className="page-head">
         <div>
-          <h1>AI Search &amp; Document Intelligence</h1>
-          <div className="muted">
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: "#0f172a", margin: "0 0 6px 0" }}>
+            AI Search &amp; Document Intelligence
+          </h1>
+          <div className="muted" style={{ fontSize: 13, color: "#64748b" }}>
             Ask natural language questions across all indexed invoices and documents using semantic vector search.
           </div>
         </div>
@@ -179,8 +192,8 @@ export default function SearchPage() {
             aria-selected={mode === m}
             className={mode === m ? "on" : ""}
             onClick={() => {
-              setMode(m);
-              setError(null);
+              dispatch(setMode(m));
+              setLocalError(null);
             }}
             title={hint}
             style={{ fontSize: 13, padding: "8px 16px" }}
@@ -204,7 +217,7 @@ export default function SearchPage() {
                   : "Search documents by keywords, supplier, or invoice numbers..."
               }
               value={q}
-              onChange={(e) => setQ(e.target.value)}
+              onChange={(e) => dispatch(setQuery(e.target.value))}
               aria-label="Search query"
               style={{ width: "100%", height: 42, fontSize: 14 }}
             />
@@ -214,7 +227,13 @@ export default function SearchPage() {
             disabled={busy}
             style={{ height: 42, padding: "0 24px", fontWeight: 600 }}
           >
-            {busy ? (mode === "rag" ? "Synthesizing Answer..." : "Searching...") : mode === "rag" ? "⚡ Ask AI Assistant" : "Search"}
+            {busy
+              ? mode === "rag"
+                ? "Synthesizing Answer..."
+                : "Searching..."
+              : mode === "rag"
+              ? "⚡ Ask AI Assistant"
+              : "Search"}
           </button>
         </div>
 
@@ -266,7 +285,10 @@ export default function SearchPage() {
             </div>
             <div className="field">
               <label>Invoice number</label>
-              <input value={f.invoice_number ?? ""} onChange={(e) => set("invoice_number", e.target.value)} />
+              <input
+                value={f.invoice_number ?? ""}
+                onChange={(e) => set("invoice_number", e.target.value)}
+              />
             </div>
             <div className="field">
               <label>Status</label>
@@ -274,16 +296,27 @@ export default function SearchPage() {
                 <option value="">Any</option>
                 <option value="completed">Completed</option>
                 <option value="needs_review">Needs review</option>
+                <option value="rejected">Rejected</option>
                 <option value="failed">Failed</option>
               </select>
             </div>
             <div className="field">
               <label>Min total ($)</label>
-              <input className="num" type="number" value={f.min_total ?? ""} onChange={(e) => set("min_total", e.target.value)} />
+              <input
+                className="num"
+                type="number"
+                value={f.min_total ?? ""}
+                onChange={(e) => set("min_total", e.target.value)}
+              />
             </div>
             <div className="field">
               <label>Max total ($)</label>
-              <input className="num" type="number" value={f.max_total ?? ""} onChange={(e) => set("max_total", e.target.value)} />
+              <input
+                className="num"
+                type="number"
+                value={f.max_total ?? ""}
+                onChange={(e) => set("max_total", e.target.value)}
+              />
             </div>
           </div>
         )}
@@ -325,7 +358,14 @@ export default function SearchPage() {
             boxShadow: "0 4px 14px rgba(59, 130, 246, 0.08)",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 12,
+            }}
+          >
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: 22 }}>🤖</span>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#0f172a" }}>
@@ -379,7 +419,15 @@ export default function SearchPage() {
           {/* Source Citations */}
           {ragResult.citations && ragResult.citations.length > 0 && (
             <div style={{ marginTop: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 8, textTransform: "uppercase" }}>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: "#475569",
+                  marginBottom: 8,
+                  textTransform: "uppercase",
+                }}
+              >
                 Grounding Sources ({ragResult.citations.length}):
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -387,7 +435,7 @@ export default function SearchPage() {
                   <button
                     key={c.document_id}
                     type="button"
-                    onClick={() => openDocById(c.document_id)}
+                    onClick={() => navigateToDoc(c.document_id)}
                     style={{
                       display: "inline-flex",
                       alignItems: "center",
@@ -402,7 +450,7 @@ export default function SearchPage() {
                       cursor: "pointer",
                       textAlign: "left",
                     }}
-                    title="Click to inspect document"
+                    title="Click to view details in new page"
                   >
                     <span>📄 {c.filename}</span>
                     {c.total != null && (
@@ -432,11 +480,7 @@ export default function SearchPage() {
               {hits.length} result{hits.length === 1 ? "" : "s"} found
             </h2>
             {hits.length > 0 && (
-              <button
-                type="button"
-                onClick={exportHitsCsv}
-                className="btn btn-sm"
-              >
+              <button type="button" onClick={exportHitsCsv} className="btn btn-sm">
                 ⤓ Export to CSV
               </button>
             )}
@@ -450,7 +494,14 @@ export default function SearchPage() {
             <div className="table-wrap">
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
-                  <tr style={{ background: "#fafbfc", borderBottom: "1px solid #e2e8f0", fontSize: 12, color: "#64748b" }}>
+                  <tr
+                    style={{
+                      background: "#fafbfc",
+                      borderBottom: "1px solid #e2e8f0",
+                      fontSize: 12,
+                      color: "#64748b",
+                    }}
+                  >
                     <th style={{ padding: "10px 14px" }}>Document</th>
                     <th style={{ padding: "10px 14px" }}>Match</th>
                     <th style={{ padding: "10px 14px" }}>Invoice #</th>
@@ -477,7 +528,7 @@ export default function SearchPage() {
                         <td style={{ minWidth: 220, padding: "12px 14px" }}>
                           <button
                             type="button"
-                            onClick={() => openDocById(h.document_id)}
+                            onClick={() => navigateToDoc(h.document_id)}
                             style={{
                               background: "none",
                               border: "none",
@@ -539,11 +590,11 @@ export default function SearchPage() {
                         <td style={{ padding: "12px 14px", textAlign: "right" }}>
                           <button
                             type="button"
-                            onClick={() => openDocById(h.document_id)}
+                            onClick={() => navigateToDoc(h.document_id)}
                             className="btn btn-sm"
                             style={{ padding: "3px 8px", fontSize: 11.5 }}
                           >
-                            View
+                            View Details →
                           </button>
                         </td>
                       </tr>
@@ -564,7 +615,7 @@ export default function SearchPage() {
               {docs.length} document{docs.length === 1 ? "" : "s"} found
             </h2>
           </div>
-          <DocTable docs={docs} onViewDoc={(d) => setInspectDoc(d)} />
+          <DocTable docs={docs} onViewDoc={(d) => navigateToDoc(d.id)} />
         </div>
       )}
 
@@ -601,18 +652,6 @@ export default function SearchPage() {
           </a>
         </div>
       </div>
-
-      {/* Document Inspector Modal */}
-      {inspectDoc && (
-        <DocModal
-          doc={inspectDoc}
-          onClose={() => setInspectDoc(null)}
-          onDeleted={() => {
-            setInspectDoc(null);
-            if (q) void executeSearch(q);
-          }}
-        />
-      )}
     </div>
   );
 }
