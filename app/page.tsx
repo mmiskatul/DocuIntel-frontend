@@ -134,11 +134,18 @@ export default function DocumentsDashboard() {
     }
   };
 
-  // Status counts
+  // Dynamically computed metrics
   const totalCount = s?.total ?? rawList.length;
   const completedCount = s?.by_status?.completed ?? rawList.filter((d) => d.status === "completed").length;
   const needsReviewCount = s?.open_review_items ?? s?.by_status?.needs_review ?? rawList.filter((d) => d.status === "needs_review").length;
   const processingCount = ((s?.by_status?.processing ?? 0) + (s?.by_status?.queued ?? 0)) || rawList.filter((d) => IN_FLIGHT.includes(d.status)).length;
+
+  // Dynamic percentage and badge calculations
+  const totalBadgeText = totalCount > 0 ? "Active repository" : "0 indexed";
+  const completedPct = totalCount > 0 ? ((completedCount / totalCount) * 100).toFixed(1) : "0.0";
+  const completedBadgeText = `${completedPct}% parsed`;
+  const needsReviewBadgeText = needsReviewCount > 0 ? `${needsReviewCount} urgent` : "0 pending";
+  const processingBadgeText = processingCount > 0 ? `${processingCount} in queue` : "Queue clear";
 
   return (
     <div style={{ maxWidth: 1240, margin: "0 auto", paddingBottom: 60 }}>
@@ -179,7 +186,7 @@ export default function DocumentsDashboard() {
         </div>
       </div>
 
-      {/* 2. KPI 4-Card Grid (Matches screenshot 4 stats cards) */}
+      {/* 2. KPI 4-Card Grid (100% Dynamic data & percentages) */}
       <div
         style={{
           display: "grid",
@@ -200,8 +207,17 @@ export default function DocumentsDashboard() {
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", letterSpacing: "0.5px" }}>TOTAL DOCUMENTS</span>
-            <span style={{ fontSize: 11, fontWeight: 600, color: "#059669", background: "#ecfdf5", padding: "2px 8px", borderRadius: 12 }}>
-              +12% this week
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: totalCount > 0 ? "#059669" : "#64748b",
+                background: totalCount > 0 ? "#ecfdf5" : "#f1f5f9",
+                padding: "2px 8px",
+                borderRadius: 12,
+              }}
+            >
+              {totalBadgeText}
             </span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -213,7 +229,7 @@ export default function DocumentsDashboard() {
             </div>
           </div>
           <div style={{ fontSize: 11.5, color: "#94a3b8" }}>
-            Indexed for search &amp; analytics
+            {totalCount > 0 ? `Indexed across ${totalCount} document record${totalCount === 1 ? "" : "s"}` : "No documents indexed yet"}
           </div>
         </div>
 
@@ -229,8 +245,17 @@ export default function DocumentsDashboard() {
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", letterSpacing: "0.5px" }}>COMPLETED</span>
-            <span style={{ fontSize: 11, fontWeight: 600, color: "#059669", background: "#ecfdf5", padding: "2px 8px", borderRadius: 12 }}>
-              94.8% parsed
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: completedCount > 0 ? "#059669" : "#64748b",
+                background: completedCount > 0 ? "#ecfdf5" : "#f1f5f9",
+                padding: "2px 8px",
+                borderRadius: 12,
+              }}
+            >
+              {completedBadgeText}
             </span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -242,7 +267,7 @@ export default function DocumentsDashboard() {
             </div>
           </div>
           <div style={{ fontSize: 11.5, color: "#94a3b8" }}>
-            Parsed line items &amp; JSON exported
+            {completedCount > 0 ? `${completedCount} parsed & verified` : "No completed documents yet"}
           </div>
         </div>
 
@@ -258,8 +283,17 @@ export default function DocumentsDashboard() {
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: "#b45309", letterSpacing: "0.5px" }}>NEEDS REVIEW</span>
-            <span style={{ fontSize: 11, fontWeight: 600, color: "#b45309", background: "#fef3c7", padding: "2px 8px", borderRadius: 12 }}>
-              5 urgent
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: needsReviewCount > 0 ? "#b45309" : "#16a34a",
+                background: needsReviewCount > 0 ? "#fef3c7" : "#ecfdf5",
+                padding: "2px 8px",
+                borderRadius: 12,
+              }}
+            >
+              {needsReviewBadgeText}
             </span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -271,7 +305,7 @@ export default function DocumentsDashboard() {
             </div>
           </div>
           <div style={{ fontSize: 11.5, color: "#b45309" }}>
-            Discrepancies in total vs line-items
+            {needsReviewCount > 0 ? `${needsReviewCount} document(s) with flagged variances` : "Zero discrepancy flags"}
           </div>
         </div>
 
@@ -287,8 +321,17 @@ export default function DocumentsDashboard() {
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: "#1d4ed8", letterSpacing: "0.5px" }}>PROCESSING</span>
-            <span style={{ fontSize: 11, fontWeight: 600, color: "#2563eb", background: "#eff6ff", padding: "2px 8px", borderRadius: 12 }}>
-              Active Queue
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: processingCount > 0 ? "#2563eb" : "#64748b",
+                background: processingCount > 0 ? "#eff6ff" : "#f1f5f9",
+                padding: "2px 8px",
+                borderRadius: 12,
+              }}
+            >
+              {processingBadgeText}
             </span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -300,7 +343,7 @@ export default function DocumentsDashboard() {
             </div>
           </div>
           <div style={{ fontSize: 11.5, color: "#94a3b8" }}>
-            Document queue active
+            {processingCount > 0 ? `${processingCount} file(s) in active queue` : "Intake queue idle"}
           </div>
         </div>
       </div>

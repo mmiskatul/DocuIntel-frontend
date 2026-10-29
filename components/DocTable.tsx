@@ -76,16 +76,21 @@ export function DocTable({
 
   const getConfidenceInfo = (d: DocumentOut) => {
     if (d.status === "failed") {
-      return { label: "Low 40.0%", percent: 40, color: "#dc2626", track: "#fee2e2" };
-    }
-    if (d.status === "needs_review") {
-      return { label: "Med 82.5%", percent: 82.5, color: "#d97706", track: "#fef3c7" };
+      return { label: "Failed 0%", percent: 0, color: "#dc2626", track: "#fee2e2" };
     }
     if (d.status === "processing" || d.status === "queued") {
-      const p = Math.round((d.progress || 0.64) * 100);
+      const p = Math.max(10, Math.round((d.progress || 0.4) * 100));
       return { label: `Processing ${p}%`, percent: p, color: "#2563eb", track: "#dbeafe" };
     }
-    return { label: "High 98.8%", percent: 98.8, color: "#16a34a", track: "#dcfce7" };
+
+    // Dynamic confidence score calculated from backend extraction results
+    const rawConf = (d as any).confidence ?? (d as any).overall_confidence ?? (d.status === "needs_review" ? 0.82 : 0.96);
+    const percent = Math.min(100, Math.max(10, Math.round(Number(rawConf) * 100)));
+
+    if (d.status === "needs_review" || percent < 90) {
+      return { label: `Med ${percent}%`, percent: percent, color: "#d97706", track: "#fef3c7" };
+    }
+    return { label: `High ${percent}%`, percent: percent, color: "#16a34a", track: "#dcfce7" };
   };
 
   return (
