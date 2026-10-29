@@ -131,11 +131,25 @@ export const api = {
   stats: () => request<Stats>("/stats"),
   fileUrl: (id: string) => `${BASE}/documents/${id}/file`,
   approve: (id: string, reviewer?: string) =>
-    request<{ success: boolean; status: string; stage: string }>(`/documents/${id}/approve`, {
+    request<{ success: boolean; status: string; stage: string; vector_stored?: boolean }>(`/documents/${id}/approve`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reviewer }),
     }),
+  reconcile: (id: string, payload: { subtotal?: number; tax?: number; total?: number; action?: string; reviewer?: string }) =>
+    request<{ success: boolean; status: string; stage: string; vector_stored?: boolean }>(`/documents/${id}/reconcile`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+  reject: (id: string, reason?: string, reviewer?: string) =>
+    request<{ success: boolean; status: string; stage: string; reason?: string }>(`/documents/${id}/reject`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason, reviewer }),
+    }),
+  rerunOcr: (id: string) =>
+    request<{ success: boolean; message: string }>(`/documents/${id}/re-ocr`, { method: "POST" }),
   batchApprove: (docIds: string[], reviewer?: string) =>
     request<{ count: number; results: any[] }>("/documents/batch-approve", {
       method: "POST",

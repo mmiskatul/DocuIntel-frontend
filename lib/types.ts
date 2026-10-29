@@ -1,4 +1,4 @@
-export type DocStatus = "queued" | "processing" | "completed" | "needs_review" | "failed";
+export type DocStatus = "queued" | "processing" | "completed" | "needs_review" | "failed" | "rejected";
 
 export interface DocSummary {
   invoice_number?: string | null;

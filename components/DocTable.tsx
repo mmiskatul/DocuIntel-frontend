@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { money, bytes } from "@/lib/format";
 import type { DocumentOut } from "@/lib/types";
 
@@ -185,23 +186,18 @@ export function DocTable({
                       {badge.label}
                     </span>
                     <div>
-                      <button
-                        type="button"
-                        onClick={() => onViewDoc?.(d)}
+                      <Link
+                        href={`/documents/${d.id}`}
                         style={{
-                          background: "none",
-                          border: "none",
-                          padding: 0,
-                          textAlign: "left",
                           color: "#1e40af",
                           fontWeight: 600,
                           fontSize: 13.5,
-                          cursor: "pointer",
+                          textDecoration: "none",
                           display: "block",
                         }}
                       >
                         {d.filename}
-                      </button>
+                      </Link>
                       <div style={{ fontSize: 11.5, color: "#64748b", marginTop: 2 }}>
                         {bytes(d.size_bytes)} • {d.page_count || 1} page{d.page_count === 1 ? "" : "s"}
                       </div>
@@ -348,26 +344,24 @@ export function DocTable({
                 <td style={{ padding: "14px 16px", textAlign: "right", whiteSpace: "nowrap" }}>
                   <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                     {isNeedsReview ? (
-                      <button
-                        type="button"
-                        onClick={() => onViewDoc?.(d)}
+                      <Link
+                        href={`/documents/${d.id}`}
                         style={{
                           background: "#d97706",
                           color: "#ffffff",
-                          border: "none",
                           borderRadius: 6,
                           padding: "5px 12px",
                           fontSize: 12,
                           fontWeight: 600,
-                          cursor: "pointer",
+                          textDecoration: "none",
+                          display: "inline-block",
                         }}
                       >
                         Review Flag
-                      </button>
+                      </Link>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => onViewDoc?.(d)}
+                      <Link
+                        href={`/documents/${d.id}`}
                         style={{
                           background: "#ffffff",
                           color: "#334155",
@@ -376,11 +370,12 @@ export function DocTable({
                           padding: "5px 12px",
                           fontSize: 12,
                           fontWeight: 500,
-                          cursor: "pointer",
+                          textDecoration: "none",
+                          display: "inline-block",
                         }}
                       >
                         View
-                      </button>
+                      </Link>
                     )}
 
                     {/* Chat / Ask RAG button */}

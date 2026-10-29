@@ -657,7 +657,7 @@ export default function DocumentsDashboard() {
           selectedIds={selectedIds}
           onToggleSelect={toggleSelect}
           onSelectAll={selectAll}
-          onViewDoc={(d) => setSelectedDoc(d)}
+          onViewDoc={(d) => router.push(`/documents/${d.id}`)}
           onChatDoc={(d) => router.push(`/search?q=${encodeURIComponent(d.filename)}`)}
           onDeleteDoc={handleDelete}
         />
@@ -802,18 +802,6 @@ export default function DocumentsDashboard() {
           </a>
         </div>
       </div>
-
-      {/* Document Detail & Preview Modal */}
-      {selectedDoc && (
-        <DocModal
-          doc={selectedDoc}
-          onClose={() => setSelectedDoc(null)}
-          onDeleted={() => {
-            void docs.refresh();
-            void stats.refresh();
-          }}
-        />
-      )}
     </div>
   );
 }

@@ -24,7 +24,7 @@ export function when(iso: string): string {
 }
 
 export const STATUS_LABEL: Record<string, string> = {
-  queued: "Queued", processing: "Processing", completed: "Completed", needs_review: "Needs review", failed: "Failed",
+  queued: "Queued", processing: "Processing", completed: "Completed", needs_review: "Needs review", failed: "Failed", rejected: "Rejected",
 };
 
 export const STAGE_LABEL: Record<string, string> = {
