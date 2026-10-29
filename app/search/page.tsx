@@ -6,11 +6,12 @@ import { DocTable } from "@/components/DocTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { api } from "@/lib/api";
 import { money } from "@/lib/format";
-import type { DocFilters, DocumentOut, SearchHit } from "@/lib/types";
+import type { DocFilters, DocumentOut, RAGResult, SearchHit } from "@/lib/types";
 
-type Mode = "hybrid" | "semantic" | "keyword" | "filters";
+type Mode = "hybrid" | "rag" | "semantic" | "keyword" | "filters";
 const MODES: [Mode, string, string][] = [
-  ["hybrid", "Smart search", "Natural language financial filters + pgvector"],
+  ["hybrid", "Smart Search", "Natural language financial filters + pgvector"],
+  ["rag", "⚡ AI Analyst (RAG)", "Vector retrieval + generative AI answering with citations"],
   ["semantic", "Dense Semantic", "Vector similarity via BAAI/bge-small-en-v1.5"],
   ["keyword", "Keyword Exact", "Exact filename, supplier & invoice # matches"],
   ["filters", "Structured Filters", "Explicit supplier, date & amount bounds"],
@@ -31,6 +32,7 @@ export default function SearchPage() {
   const [needsReview, setNeedsReview] = useState(false);
   const [hits, setHits] = useState<SearchHit[] | null>(null);
   const [docs, setDocs] = useState<DocumentOut[] | null>(null);
+  const [ragResult, setRagResult] = useState<RAGResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeQueryInfo, setActiveQueryInfo] = useState<string | null>(null);
@@ -42,6 +44,7 @@ export default function SearchPage() {
     setError(null);
     setHits(null);
     setDocs(null);
+    setRagResult(null);
     setActiveQueryInfo(null);
 
     try {
@@ -59,16 +62,24 @@ export default function SearchPage() {
         };
         const results = await api.listDocuments(filters);
         setDocs(results);
+      } else if (searchMode === "rag") {
+        if (!queryText.trim()) {
+          setError("Please enter a question to ask the AI Financial Analyst (RAG).");
+          return;
+        }
+        setActiveQueryInfo("Executing sub-millisecond pgvector HNSW cosine search + AI generative synthesis.");
+        const rag = await api.ragSearch(queryText.trim());
+        setRagResult(rag);
+        setHits(rag.hits);
       } else {
         if (!queryText.trim()) {
           setError("Please enter a query or select an example prompt below.");
           return;
         }
 
-        // Detect financial query interpretation
         const lower = queryText.toLowerCase();
         if (lower.includes("above") || lower.includes("tax") || lower.includes("spreadsheet") || lower.includes("supplier")) {
-          setActiveQueryInfo(`Natural-language financial constraints detected. Applying deterministic arithmetic verification + pgvector semantic matching.`);
+          setActiveQueryInfo("Natural-language financial constraints detected. Applying deterministic arithmetic verification + pgvector semantic matching.");
         }
 
         const results = await api.search(queryText.trim(), searchMode);
@@ -136,9 +147,9 @@ export default function SearchPage() {
     <>
       <div className="page-head">
         <div>
-          <h1>Natural-Language Document Search</h1>
+          <h1>High-Performance Vector Search & RAG Analyst</h1>
           <div className="muted">
-            Search invoices, purchase orders, and receipts with natural-language financial queries, keyword matches, or Supabase pgvector semantic search.
+            Search invoices, purchase orders, and receipts with sub-millisecond Supabase pgvector (HNSW) search, natural language financial filters, and AI RAG synthesis.
           </div>
         </div>
       </div>
@@ -158,6 +169,7 @@ export default function SearchPage() {
                   setMode(m);
                   setHits(null);
                   setDocs(null);
+                  setRagResult(null);
                 }}
               >
                 {label}
@@ -186,7 +198,9 @@ export default function SearchPage() {
               style={{ paddingLeft: 38, height: 42, fontSize: 14, borderRadius: 8 }}
               autoFocus
               placeholder={
-                mode === "filters"
+                mode === "rag"
+                  ? "Ask any question (e.g. How much did we spend on cloud services? What tax issues occurred?)"
+                  : mode === "filters"
                   ? "Optional text filter..."
                   : "e.g. Find invoices from supplier HellasFresh above €1,000"
               }
@@ -196,11 +210,11 @@ export default function SearchPage() {
             />
           </div>
           <button className="btn btn-primary" disabled={busy} style={{ height: 42, padding: "0 24px" }}>
-            {busy ? "Searching..." : "Search"}
+            {busy ? (mode === "rag" ? "Synthesizing RAG..." : "Searching...") : mode === "rag" ? "⚡ Ask AI (RAG)" : "Search"}
           </button>
         </div>
 
-        {/* Quick Example Prompt Pills (Pillar 5 Specifications) */}
+        {/* Quick Example Prompt Pills */}
         {mode !== "filters" && (
           <div style={{ marginTop: 14 }}>
             <div style={{ fontSize: 12, color: "#64748b", fontWeight: 600, marginBottom: 8 }}>
@@ -298,6 +312,112 @@ export default function SearchPage() {
       )}
 
       {error && <div className="alert alert-error">{error}</div>}
+
+      {/* RAG Answer Presentation Box */}
+      {ragResult && (
+        <div
+          className="card"
+          style={{
+            padding: "20px 24px",
+            background: "linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)",
+            border: "1px solid #cbd5e1",
+            borderRadius: 12,
+            marginBottom: 20,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.03)",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 20 }}>🤖</span>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#0f172a" }}>
+                AI Financial Analyst Answer (RAG)
+              </h3>
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <span
+                style={{
+                  background: "#dbeafe",
+                  color: "#1d4ed8",
+                  padding: "3px 10px",
+                  borderRadius: 12,
+                  fontSize: 11,
+                  fontWeight: 600,
+                }}
+              >
+                HNSW Vector Latency: {ragResult.latency_ms}ms
+              </span>
+              <span
+                style={{
+                  background: "#f1f5f9",
+                  color: "#475569",
+                  padding: "3px 10px",
+                  borderRadius: 12,
+                  fontSize: 11,
+                  fontWeight: 500,
+                  border: "1px solid #e2e8f0",
+                }}
+              >
+                Engine: {ragResult.provider_used}
+              </span>
+            </div>
+          </div>
+
+          <div
+            style={{
+              fontSize: 14,
+              lineHeight: 1.6,
+              color: "#1e293b",
+              background: "#ffffff",
+              padding: "16px 20px",
+              borderRadius: 8,
+              border: "1px solid #e2e8f0",
+              whiteSpace: "pre-line",
+            }}
+          >
+            {ragResult.answer}
+          </div>
+
+          {/* Source Citations */}
+          {ragResult.citations && ragResult.citations.length > 0 && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#64748b", marginBottom: 6 }}>
+                Retrieved Source Citations ({ragResult.citations.length} documents):
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {ragResult.citations.map((c) => (
+                  <Link
+                    key={c.document_id}
+                    href={`/documents/${c.document_id}`}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      background: "#ffffff",
+                      border: "1px solid #cbd5e1",
+                      borderRadius: 6,
+                      padding: "4px 10px",
+                      fontSize: 12,
+                      color: "#0369a1",
+                      textDecoration: "none",
+                      fontWeight: 500,
+                    }}
+                  >
+                    <span>📄 {c.filename}</span>
+                    {c.total != null && (
+                      <span style={{ color: "#047857", fontWeight: 600 }}>
+                        {money(c.total, c.currency)}
+                      </span>
+                    )}
+                    <span style={{ color: "#64748b", fontSize: 11 }}>
+                      ({(c.similarity * 100).toFixed(0)}% match)
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Search Hits Table */}
       {hits && (

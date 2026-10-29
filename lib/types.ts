@@ -126,4 +126,23 @@ export interface DocFilters {
   max_total?: number;
 }
 
+export interface RAGCitation {
+  document_id: string;
+  filename: string;
+  supplier?: string;
+  total?: number;
+  currency?: string;
+  similarity: number;
+  snippet?: string;
+}
+
+export interface RAGResult {
+  query: string;
+  answer: string;
+  provider_used: string;
+  citations: RAGCitation[];
+  hits: SearchHit[];
+  latency_ms: number;
+}
+
 export const IN_FLIGHT: DocStatus[] = ["queued", "processing"];

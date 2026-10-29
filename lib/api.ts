@@ -109,6 +109,8 @@ export const api = {
     }),
   search: (q: string, mode: "keyword" | "semantic" | "hybrid", limit = 20) =>
     request<SearchHit[]>(`/search${buildQuery({ q, mode, limit })}`),
+  ragSearch: (q: string, provider: "auto" | "openai" | "anthropic" | "deepseek" | "grok" = "auto") =>
+    request<import("./types").RAGResult>(`/search/rag${buildQuery({ q, provider })}`),
   stats: () => request<Stats>("/stats"),
   fileUrl: (id: string) => `${BASE}/documents/${id}/file`,
   approve: (id: string, reviewer?: string) =>
