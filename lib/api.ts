@@ -147,4 +147,6 @@ export const api = {
     }),
   seedDemoData: () => request<{ success: boolean; message: string }>("/documents/seed", { method: "POST" }),
   getHistory: (id: string) => request<any[]>(`/documents/${id}/history`),
+  wakeup: () => request<{ status: string; backend: string; ocr_model: any }>("/wakeup"),
+  health: () => request<any>("/health"),
 };
