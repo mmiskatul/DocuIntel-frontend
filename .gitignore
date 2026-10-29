@@ -31,9 +31,6 @@ node_modules/
 
 # 4. Next.js & Build Output
 .next/
-.open-next/
-.wrangler/
-.dev.vars
 out/
 build/
 dist/

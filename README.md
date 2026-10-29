@@ -26,9 +26,10 @@ docker run -p 3000:3000 --env-file .env docuintel-frontend
 ```
 
 ## Vercel Deployment
-1. Import this repository (or set root directory to `frontend/`).
-2. Add environment variables:
-   - `BACKEND_URL`: `https://your-backend-service.onrender.com`
-   - `BACKEND_API_KEY`: `your-backend-api-key`
-3. Click **Deploy**.
+1. Import the repository `Task-frontend` in [Vercel](https://vercel.com/new).
+2. Framework Preset: **Next.js** (detected automatically).
+3. Add Environment Variables:
+   - `NEXT_PUBLIC_API_URL`: `https://task-backend-zgmc.onrender.com`
+   - `BACKEND_URL`: `https://task-backend-zgmc.onrender.com`
+4. Click **Deploy**. Zero additional configuration or adapters required.
 
