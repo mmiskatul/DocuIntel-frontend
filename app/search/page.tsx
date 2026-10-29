@@ -568,6 +568,40 @@ export default function SearchPage() {
         </div>
       )}
 
+      {/* Bottom Global Enterprise Footer */}
+      <div
+        style={{
+          marginTop: 40,
+          paddingTop: 20,
+          borderTop: "1px solid #e2e8f0",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: 12,
+          fontSize: 12,
+          color: "#64748b",
+        }}
+      >
+        <div>
+          <strong style={{ color: "#334155" }}>DocuIntel Enterprise v3.2</strong> • LangChain Multi-Modal Agent Engine Active
+        </div>
+        <div style={{ display: "flex", gap: 16 }}>
+          <a href="#" onClick={(e) => e.preventDefault()} style={{ color: "#64748b", textDecoration: "none" }}>
+            API Documentation
+          </a>
+          <a href="#" onClick={(e) => e.preventDefault()} style={{ color: "#64748b", textDecoration: "none" }}>
+            Vector Index Status
+          </a>
+          <a href="#" onClick={(e) => e.preventDefault()} style={{ color: "#64748b", textDecoration: "none" }}>
+            Security &amp; Compliance (SOC2)
+          </a>
+          <a href="#" onClick={(e) => e.preventDefault()} style={{ color: "#64748b", textDecoration: "none" }}>
+            Support
+          </a>
+        </div>
+      </div>
+
       {/* Document Inspector Modal */}
       {inspectDoc && (
         <DocModal

@@ -386,3 +386,4 @@ export function DocModal({ doc, onClose, onDeleted }: DocModalProps) {
     </div>
   );
 }
+
