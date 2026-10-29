@@ -168,6 +168,28 @@ export function DocModal({ doc, onClose, onDeleted }: DocModalProps) {
           </div>
         )}
 
+        {/* Failed Document Alert */}
+        {doc.status === "failed" && (
+          <div
+            style={{
+              padding: "12px 24px",
+              background: "#fef2f2",
+              color: "#991b1b",
+              fontSize: 13,
+              borderBottom: "1px solid #fecaca",
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+            }}
+          >
+            <span style={{ fontSize: 16 }}>⚠️</span>
+            <div>
+              <strong>Processing Notice:</strong>{" "}
+              {doc.error || "The file could not be parsed because it is corrupted, empty, or an unsupported binary format."}
+            </div>
+          </div>
+        )}
+
         {/* Modal Navigation Tabs */}
         <div style={{ display: "flex", borderBottom: "1px solid #e2e8f0", padding: "0 24px", background: "#ffffff" }}>
           <button
