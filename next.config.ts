@@ -18,8 +18,7 @@ const config: NextConfig = {
   async rewrites() {
     const backendUrl =
       process.env.NEXT_PUBLIC_API_URL ||
-      process.env.BACKEND_URL ||
-      "https://task-backend-zgmc.onrender.com";
+      process.env.BACKEND_URL || "http://localhost:8000";
     return [
       {
         source: "/api/:path*",
