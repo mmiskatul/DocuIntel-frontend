@@ -45,7 +45,7 @@ export default function DocumentsDashboard() {
         if (statusFilter === "Processing" && d.status !== "processing" && d.status !== "queued") return false;
         if (statusFilter === "Needs Review" && d.status !== "needs_review") return false;
         if (statusFilter === "Completed" && d.status !== "completed") return false;
-        if (statusFilter === "Failed" && d.status !== "failed") return false;
+        if (statusFilter === "Failed" && d.status !== "failed" && d.status !== "rejected") return false;
       }
 
       // Document Type filter

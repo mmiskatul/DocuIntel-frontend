@@ -76,8 +76,8 @@ export function DocTable({
   };
 
   const getConfidenceInfo = (d: DocumentOut) => {
-    if (d.status === "failed") {
-      return { label: "Failed 0%", percent: 0, color: "#dc2626", track: "#fee2e2" };
+    if (d.status === "failed" || d.status === "rejected") {
+      return { label: d.status === "rejected" ? "Rejected" : "Failed 0%", percent: 0, color: "#dc2626", track: "#fee2e2" };
     }
     if (d.status === "processing" || d.status === "queued") {
       const p = Math.max(10, Math.round((d.progress || 0.4) * 100));
@@ -324,6 +324,24 @@ export function DocTable({
                       }}
                     >
                       ✕ Failed
+                    </span>
+                  )}
+                  {d.status === "rejected" && (
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 5,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: "#991b1b",
+                        background: "#fee2e2",
+                        border: "1px solid #fca5a5",
+                        padding: "3px 10px",
+                        borderRadius: 14,
+                      }}
+                    >
+                      ✕ Rejected
                     </span>
                   )}
                 </td>
