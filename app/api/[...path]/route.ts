@@ -9,7 +9,9 @@ import type { NextRequest } from "next/server";
 export const dynamic = "force-dynamic";
 
 const BACKEND = (process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/$/, "");
-const PASS_THROUGH = ["content-type", "content-disposition", "content-length", "retry-after"];
+// content-length / content-encoding are deliberately NOT copied: fetch() transparently decompresses the upstream body
+// (the hosting CDN gzips it), so the upstream length no longer matches and clients would receive a truncated response.
+const PASS_THROUGH = ["content-type", "content-disposition", "retry-after"];
 
 async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }): Promise<Response> {
   const { path } = await ctx.params;
