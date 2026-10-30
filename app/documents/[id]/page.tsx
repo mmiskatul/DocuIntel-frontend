@@ -117,6 +117,11 @@ export default function DocumentDetailsPage({
   const isRejected = doc.status === "rejected" || data.is_supported_format === false;
   const rejectionReason = doc.error || data.rejection_reason || (isRejected ? "Document does not match supported commercial invoice/waybill format." : null);
 
+  // Issues & Validation State
+  const issues: any[] = data.issues || [];
+  const errorIssues = issues.filter((i: any) => i.severity === "error");
+  const isNeedsReview = (doc.status === "needs_review" || errorIssues.length > 0) && doc.status !== "completed";
+
   // Check Arithmetic Variance (Only if valid numbers exist)
   let calculatedSum: number | null = null;
   let varianceDiff: number | null = null;
@@ -126,6 +131,13 @@ export default function DocumentDetailsPage({
     calculatedSum = Math.round((subtotalVal + taxVal) * 100) / 100;
     varianceDiff = Math.round((totalVal - calculatedSum) * 100) / 100;
     hasDiscrepancy = Math.abs(varianceDiff) > 0.05 && doc.status !== "completed";
+  } else if (lineItems.length > 0 && totalVal !== null && subtotalVal === null) {
+    const sumLines = lineItems.reduce((acc: number, item: any) => acc + (Number(item.amount) || 0), 0);
+    if (sumLines > 0) {
+      calculatedSum = Math.round((sumLines + (taxVal != null ? taxVal : 0)) * 100) / 100;
+      varianceDiff = Math.round((totalVal - calculatedSum) * 100) / 100;
+      hasDiscrepancy = Math.abs(varianceDiff) > 0.05 && doc.status !== "completed";
+    }
   }
 
   // 1. Approve & Vectorize Action
@@ -871,8 +883,8 @@ export default function DocumentDetailsPage({
             </div>
           )}
 
-          {/* CARD 1 (ALT): ARITHMETIC VARIANCE (Only when real invoice has math discrepancy) */}
-          {!isRejected && hasDiscrepancy && calculatedSum !== null && totalVal !== null && (
+          {/* CARD 1 (ALT): ENTERPRISE RULE VALIDATOR (Flags records requiring manual review) */}
+          {!isRejected && (hasDiscrepancy || isNeedsReview || errorIssues.length > 0) && (
             <div
               style={{
                 background: "#fffafb",
@@ -882,7 +894,7 @@ export default function DocumentDetailsPage({
                 boxShadow: "0 1px 3px rgba(185,28,28,0.05)",
               }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span
                     style={{
@@ -900,7 +912,7 @@ export default function DocumentDetailsPage({
                     ⚖
                   </span>
                   <span style={{ fontSize: 13.5, fontWeight: 700, color: "#0f172a" }}>
-                    Discrepancy in Rule Validator #4
+                    Manual Review Required: {doc.stage || "Validation Issues Detected"}
                   </span>
                 </div>
                 <span
@@ -913,53 +925,97 @@ export default function DocumentDetailsPage({
                     borderRadius: 4,
                   }}
                 >
-                  ARITHMETIC ERROR
+                  {errorIssues.some((i: any) => i.code === "DUPLICATE_INVOICE")
+                    ? "DUPLICATE INVOICE"
+                    : hasDiscrepancy
+                    ? "ARITHMETIC ERROR"
+                    : errorIssues.some((i: any) => i.code.startsWith("NEGATIVE_") || i.code === "ZERO_TOTAL_WITH_ITEMS")
+                    ? "INCORRECT NUMERIC VALUE"
+                    : "MISSING FIELDS"}
                 </span>
               </div>
 
-              <p style={{ margin: "0 0 12px 0", fontSize: 12.5, color: "#475569", lineHeight: 1.5 }}>
-                Calculated Sum (<strong>${calculatedSum.toFixed(2)}</strong>) differs from extracted Total (<strong>${totalVal.toFixed(2)}</strong>) by{" "}
-                <span style={{ color: "#dc2626", fontWeight: 700 }}>
-                  ${Math.abs(varianceDiff || 0).toFixed(2)}
-                </span>. Suspected misread OCR digit or missing unprinted discount line.
-              </p>
+              {/* List of Detailed Issues */}
+              <div style={{ marginBottom: 12 }}>
+                {issues.map((iss: any, idx: number) => (
+                  <div
+                    key={idx}
+                    style={{
+                      background: iss.severity === "error" ? "#fef2f2" : "#f8fafc",
+                      border: `1px solid ${iss.severity === "error" ? "#fecaca" : "#e2e8f0"}`,
+                      borderRadius: 6,
+                      padding: "8px 12px",
+                      marginBottom: 6,
+                      fontSize: 12,
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 8,
+                    }}
+                  >
+                    <span style={{ color: iss.severity === "error" ? "#dc2626" : "#d97706", fontWeight: 700 }}>
+                      {iss.severity === "error" ? "✕" : "⚠"}
+                    </span>
+                    <div style={{ flex: 1 }}>
+                      <strong style={{ color: iss.severity === "error" ? "#991b1b" : "#92400e" }}>
+                        [{iss.code}]
+                      </strong>{" "}
+                      <span style={{ color: "#334155" }}>{iss.message}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
 
+              {/* Discrepancy Arithmetic Summary (If math mismatch exists) */}
+              {hasDiscrepancy && calculatedSum !== null && totalVal !== null && (
+                <p style={{ margin: "0 0 12px 0", fontSize: 12.5, color: "#475569", lineHeight: 1.5 }}>
+                  Calculated Sum (<strong>${calculatedSum.toFixed(2)}</strong>) differs from extracted Total (<strong>${totalVal.toFixed(2)}</strong>) by{" "}
+                  <span style={{ color: "#dc2626", fontWeight: 700 }}>
+                    ${Math.abs(varianceDiff || 0).toFixed(2)}
+                  </span>. Suspected misread OCR digit or missing unprinted discount line.
+                </p>
+              )}
+
+              {/* Reconciliation Action Buttons */}
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button
-                  type="button"
-                  onClick={handleApplySum}
-                  disabled={busy}
-                  style={{
-                    background: "#2563eb",
-                    color: "#ffffff",
-                    border: "none",
-                    borderRadius: 6,
-                    padding: "6px 14px",
-                    fontSize: 12,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                  }}
-                >
-                  ⊞ Apply Sum (${calculatedSum.toFixed(2)})
-                </button>
+                {calculatedSum !== null && (
+                  <button
+                    type="button"
+                    onClick={handleApplySum}
+                    disabled={busy}
+                    style={{
+                      background: "#2563eb",
+                      color: "#ffffff",
+                      border: "none",
+                      borderRadius: 6,
+                      padding: "6px 14px",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    ⊞ Apply Sum (${calculatedSum.toFixed(2)})
+                  </button>
+                )}
 
-                <button
-                  type="button"
-                  onClick={handleOverride}
-                  disabled={busy}
-                  style={{
-                    background: "#ffffff",
-                    color: "#334155",
-                    border: "1px solid #cbd5e1",
-                    borderRadius: 6,
-                    padding: "6px 14px",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                  }}
-                >
-                  ⇋ Override (${totalVal.toFixed(2)})
-                </button>
+                {totalVal !== null && (
+                  <button
+                    type="button"
+                    onClick={handleOverride}
+                    disabled={busy}
+                    style={{
+                      background: "#ffffff",
+                      color: "#334155",
+                      border: "1px solid #cbd5e1",
+                      borderRadius: 6,
+                      padding: "6px 14px",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    ⇋ Override (${totalVal.toFixed(2)})
+                  </button>
+                )}
 
                 <button
                   type="button"
@@ -976,6 +1032,24 @@ export default function DocumentDetailsPage({
                   }}
                 >
                   ✎ Manual Reconcile
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleApprove}
+                  disabled={busy}
+                  style={{
+                    background: "#059669",
+                    color: "#ffffff",
+                    border: "none",
+                    borderRadius: 6,
+                    padding: "6px 14px",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  ✓ Approve &amp; Vectorize
                 </button>
               </div>
 
