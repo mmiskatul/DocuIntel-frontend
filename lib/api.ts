@@ -66,8 +66,8 @@ export const api = {
     }),
   search: (q: string, mode: "keyword" | "semantic" | "hybrid", limit = 20) =>
     request<SearchHit[]>(`/search${buildQuery({ q, mode, limit })}`),
-  ragSearch: (q: string, provider: "auto" | "openai" | "anthropic" | "deepseek" | "grok" = "auto") =>
-    request<import("./types").RAGResult>(`/search/rag${buildQuery({ q, provider })}`),
+  ragSearch: (q: string) =>
+    request<import("./types").RAGResult>(`/search/rag${buildQuery({ q })}`),
   stats: () => request<Stats>("/stats"),
   crossVerify: (left: string, right: string, flagMismatches = true) =>
     request<CrossVerifyReport>("/documents/cross-verify", {

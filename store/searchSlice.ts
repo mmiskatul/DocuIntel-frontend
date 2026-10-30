@@ -7,7 +7,6 @@ export type SearchMode = "rag" | "hybrid" | "filters" | "semantic" | "keyword";
 export interface SearchState {
   query: string;
   mode: SearchMode;
-  provider: "auto" | "openai" | "anthropic" | "deepseek" | "grok";
   hits: SearchHit[] | null;
   docs: DocumentOut[] | null;
   ragResult: RAGResult | null;
@@ -19,7 +18,6 @@ export interface SearchState {
 const initialState: SearchState = {
   query: "",
   mode: "rag",
-  provider: "auto",
   hits: null,
   docs: null,
   ragResult: null,
@@ -45,17 +43,11 @@ export const runSearch = createAsyncThunk(
 export const runRagQuery = createAsyncThunk(
   "search/runRagQuery",
   async (
-    {
-      q,
-      provider,
-    }: {
-      q: string;
-      provider?: "auto" | "openai" | "anthropic" | "deepseek" | "grok";
-    },
+    { q }: { q: string },
     { rejectWithValue }
   ) => {
     try {
-      return await api.ragSearch(q, provider || "auto");
+      return await api.ragSearch(q);
     } catch (err: any) {
       return rejectWithValue(err.message || "AI answer generation failed");
     }
@@ -82,12 +74,6 @@ export const searchSlice = createSlice({
     },
     setMode(state, action: PayloadAction<SearchMode>) {
       state.mode = action.payload;
-    },
-    setProvider(
-      state,
-      action: PayloadAction<"auto" | "openai" | "anthropic" | "deepseek" | "grok">
-    ) {
-      state.provider = action.payload;
     },
     setHits(state, action: PayloadAction<SearchHit[] | null>) {
       state.hits = action.payload;
@@ -156,7 +142,6 @@ export const searchSlice = createSlice({
 export const {
   setQuery,
   setMode,
-  setProvider,
   setHits,
   setDocs,
   setRagResult,

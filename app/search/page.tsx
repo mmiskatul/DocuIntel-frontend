@@ -405,7 +405,7 @@ export default function SearchPage() {
                   border: "1px solid #e2e8f0",
                 }}
               >
-                Engine: {ragResult.provider_used || "DocuIntel Engine"}
+                Model: {ragResult.provider_used}
               </span>
             </div>
           </div>

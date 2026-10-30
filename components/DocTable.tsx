@@ -85,7 +85,10 @@ export function DocTable({
     }
 
     // Dynamic confidence score calculated from backend extraction results
-    const rawConf = (d as any).confidence ?? (d as any).overall_confidence ?? (d.status === "needs_review" ? 0.82 : 0.96);
+    const rawConf = (d as any).confidence ?? (d as any).overall_confidence;
+    if (rawConf === null || rawConf === undefined) {
+      return { label: "n/a", percent: 0, color: "#94a3b8", track: "#e2e8f0" };
+    }
     const percent = Math.min(100, Math.max(10, Math.round(Number(rawConf) * 100)));
 
     if (d.status === "needs_review" || percent < 90) {

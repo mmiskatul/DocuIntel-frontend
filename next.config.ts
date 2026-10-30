@@ -15,17 +15,8 @@ const config: NextConfig = {
       },
     ];
   },
-  async rewrites() {
-    const backendUrl =
-      process.env.NEXT_PUBLIC_API_URL ||
-      process.env.BACKEND_URL || "http://localhost:8000";
-    return [
-      {
-        source: "/api/:path*",
-        destination: `${backendUrl.replace(/\/$/, "")}/api/:path*`,
-      },
-    ];
-  },
+  // No rewrites: /api/* is served by app/api/[...path]/route.ts, which adds the server-side API key.
+  // (A rewrite would run first and send requests to the backend without the key.)
 };
 
 export default config;
