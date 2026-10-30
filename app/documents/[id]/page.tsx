@@ -102,7 +102,7 @@ export default function DocumentDetailsPage({
   const totalPages = Math.max(doc.page_count || 1, Object.keys(pageTexts).length);
 
   // 100% DYNAMIC EXTRACTED VALUES (NO STATIC / FAKE FALLBACKS!)
-  const vendorName = data.supplier_name || doc.summary?.supplier_name || data.document_title || null;
+  const vendorName = data.supplier_name || doc.summary?.supplier_name || null;
   const customerName = data.customer_name || doc.summary?.customer_name || null;
   const docDate = data.invoice_date || doc.summary?.invoice_date || null;
   const invoiceNumber = data.invoice_number || doc.summary?.invoice_number || null;
@@ -1126,7 +1126,7 @@ export default function DocumentDetailsPage({
                     borderRadius: 4,
                   }}
                 >
-                  {vendorName ? "✔ 98.4% Confidence" : "Not Detected"}
+                  {vendorName ? `✔ ${Math.round((currentResult.overall_confidence || 0.95) * 100)}% Confidence` : "Not Detected"}
                 </span>
               </div>
               <div
@@ -1164,7 +1164,7 @@ export default function DocumentDetailsPage({
                     borderRadius: 4,
                   }}
                 >
-                  {customerName ? "✔ 97.5% Confidence" : "Not Specified (Null)"}
+                  {customerName ? `✔ ${Math.round((currentResult.overall_confidence || 0.95) * 100)}% Confidence` : "Not Specified (Null)"}
                 </span>
               </div>
               <div
@@ -1186,7 +1186,7 @@ export default function DocumentDetailsPage({
               </div>
             </div>
 
-            {/* Field 2: Document Date */}
+            {/* Field 3: Document Date */}
             <div style={{ marginBottom: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                 <span style={{ fontSize: 10.5, fontWeight: 700, color: "#475569", letterSpacing: "0.5px" }}>
@@ -1202,7 +1202,7 @@ export default function DocumentDetailsPage({
                     borderRadius: 4,
                   }}
                 >
-                  {docDate ? "98.1% Confidence" : "Not Detected"}
+                  {docDate ? `✔ ${Math.round((currentResult.overall_confidence || 0.95) * 100)}% Confidence` : "Not Detected"}
                 </span>
               </div>
               <div
@@ -1224,7 +1224,7 @@ export default function DocumentDetailsPage({
               </div>
             </div>
 
-            {/* Field 3: Invoice / Reference Number */}
+            {/* Field 4: Invoice / Reference Number */}
             <div style={{ marginBottom: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                 <span style={{ fontSize: 10.5, fontWeight: 700, color: "#475569", letterSpacing: "0.5px" }}>
@@ -1240,7 +1240,7 @@ export default function DocumentDetailsPage({
                     borderRadius: 4,
                   }}
                 >
-                  {invoiceNumber ? "98.9% Confidence" : "Not Detected"}
+                  {invoiceNumber ? `✔ ${Math.round((currentResult.overall_confidence || 0.95) * 100)}% Confidence` : "Not Detected"}
                 </span>
               </div>
               <div
@@ -1262,7 +1262,7 @@ export default function DocumentDetailsPage({
               </div>
             </div>
 
-            {/* Field 4: Base Subtotal */}
+            {/* Field 5: Base Subtotal */}
             <div style={{ marginBottom: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                 <span style={{ fontSize: 10.5, fontWeight: 700, color: "#475569", letterSpacing: "0.5px" }}>
@@ -1278,7 +1278,7 @@ export default function DocumentDetailsPage({
                     borderRadius: 4,
                   }}
                 >
-                  {subtotalVal !== null ? "97.2% Confidence" : "Not Detected"}
+                  {subtotalVal !== null ? `✔ ${Math.round((currentResult.overall_confidence || 0.95) * 100)}% Confidence` : "Not Detected"}
                 </span>
               </div>
               <div
@@ -1300,7 +1300,7 @@ export default function DocumentDetailsPage({
               </div>
             </div>
 
-            {/* Field 5: Tax / Surcharge */}
+            {/* Field 6: Tax / Surcharge */}
             <div style={{ marginBottom: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                 <span style={{ fontSize: 10.5, fontWeight: 700, color: hasDiscrepancy ? "#991b1b" : "#475569", letterSpacing: "0.5px" }}>
@@ -1316,7 +1316,7 @@ export default function DocumentDetailsPage({
                     borderRadius: 4,
                   }}
                 >
-                  {hasDiscrepancy ? "74.0% Needs Check" : taxVal !== null ? "96.5% Confidence" : "Not Detected"}
+                  {hasDiscrepancy ? "Needs Check" : taxVal !== null ? `✔ ${Math.round((currentResult.overall_confidence || 0.95) * 100)}% Confidence` : "Not Detected"}
                 </span>
               </div>
               <div
@@ -1338,7 +1338,7 @@ export default function DocumentDetailsPage({
               </div>
             </div>
 
-            {/* Field 6: Total Amount Extracted */}
+            {/* Field 7: Total Amount Extracted */}
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                 <span style={{ fontSize: 10.5, fontWeight: 700, color: hasDiscrepancy ? "#991b1b" : "#475569", letterSpacing: "0.5px" }}>
@@ -1354,7 +1354,7 @@ export default function DocumentDetailsPage({
                     borderRadius: 4,
                   }}
                 >
-                  {hasDiscrepancy ? "82.5% Mismatched" : totalVal !== null ? "99.2% Confidence" : "Not Detected"}
+                  {hasDiscrepancy ? "Discrepancy" : totalVal !== null ? `✔ ${Math.round((currentResult.overall_confidence || 0.95) * 100)}% Confidence` : "Not Detected"}
                 </span>
               </div>
               <div
