@@ -128,7 +128,7 @@ export default function DocumentDetailsPage({
 
   // Check Format Rejection
   const isRejected = doc.status === "rejected" || data.is_supported_format === false;
-  const rejectionReason = doc.error || data.rejection_reason || (isRejected ? "Document does not match supported commercial invoice/waybill format." : null);
+  const rejectionReason = doc.error || data.rejection_reason || (isRejected ? `Document rejected: not a valid commercial billing document (Identified as ${documentType}).` : null);
 
   // Issues & Validation State
   const issues: any[] = data.issues || [];
@@ -484,7 +484,25 @@ export default function DocumentDetailsPage({
               }}
             >
               <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#b91c1c" }} />
-              ✕ Format Rejected (Non-Billing Document Detected)
+              ✕ Intake Rejected: {documentType}
+            </div>
+          ) : doc.status === "failed" ? (
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                background: "#fee2e2",
+                border: "1px solid #fca5a5",
+                color: "#991b1b",
+                fontSize: 12,
+                fontWeight: 700,
+                padding: "4px 12px",
+                borderRadius: 14,
+              }}
+            >
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#dc2626" }} />
+              ✕ Processing Failed: {doc.stage || "Parser Error"}
             </div>
           ) : doc.status === "needs_review" ? (
             <div
@@ -502,7 +520,7 @@ export default function DocumentDetailsPage({
               }}
             >
               <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#dc2626" }} />
-              ⚠ Needs Review (Variance or Ambiguity Detected)
+              ⚠ Needs Review ({doc.stage || "Variance Detected"})
             </div>
           ) : (
             <div
@@ -531,19 +549,21 @@ export default function DocumentDetailsPage({
             display: "inline-flex",
             alignItems: "center",
             gap: 8,
-            background: isRejected ? "#f1f5f9" : "#ccfbf1",
-            border: isRejected ? "1px solid #cbd5e1" : "1px solid #99f6e4",
-            color: isRejected ? "#475569" : "#0f766e",
+            background: isRejected || doc.status === "failed" ? "#f1f5f9" : "#ccfbf1",
+            border: isRejected || doc.status === "failed" ? "1px solid #cbd5e1" : "1px solid #99f6e4",
+            color: isRejected || doc.status === "failed" ? "#475569" : "#0f766e",
             fontSize: 12,
             fontWeight: 600,
             padding: "3px 12px",
             borderRadius: 6,
           }}
         >
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: isRejected ? "#64748b" : "#0d9488" }} />
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: isRejected || doc.status === "failed" ? "#64748b" : "#0d9488" }} />
           <span>
             {isRejected
-              ? "Format Validator • Excluded from Vector Search"
+              ? `Dynamic Classification • ${documentType}`
+              : doc.status === "failed"
+              ? `Parser Failure • ${doc.stage || "Error"}`
               : `LangChain v2.4 Vision-LLM • ${((currentResult.overall_confidence || 0.95) * 100).toFixed(1)}% Confidence`}
           </span>
         </div>
@@ -869,7 +889,7 @@ export default function DocumentDetailsPage({
                     ✕
                   </span>
                   <span style={{ fontSize: 13.5, fontWeight: 700, color: "#991b1b" }}>
-                    Rule Validator #1: Format Validation Failed
+                    Intake Gatekeeper: Rejected ({documentType})
                   </span>
                 </div>
                 <span
@@ -888,13 +908,13 @@ export default function DocumentDetailsPage({
 
               <div style={{ fontSize: 12.5, color: "#475569", lineHeight: 1.55 }}>
                 <p style={{ margin: "0 0 8px 0" }}>
-                  <strong>Rejection Reason:</strong> {rejectionReason}
+                  <strong>Failure / Rejection Reason:</strong> {rejectionReason}
                 </p>
                 <p style={{ margin: "0 0 8px 0" }}>
-                  <strong>Classified Type:</strong> <span style={{ color: "#0f172a", fontWeight: 600 }}>{documentType}</span>
+                  <strong>Detected Classification:</strong> <span style={{ color: "#0f172a", fontWeight: 700 }}>{documentType}</span>
                 </p>
                 <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "8px 10px", fontSize: 11.5, color: "#b91c1c" }}>
-                  <strong>Safety Enforcement:</strong> This document is strictly excluded from the search vector database. Only standardized Invoices, Waybills, and Commercial Receipts are indexed.
+                  <strong>Safety Enforcement:</strong> This document is strictly excluded from the search vector database. Only verified commercial billing documents (Invoices, Waybills, and Receipts) are vectorized.
                 </div>
               </div>
 
@@ -1184,7 +1204,7 @@ export default function DocumentDetailsPage({
                   </button>
                 )}
                 <span style={{ fontSize: 11.5, color: "#64748b", fontWeight: 500 }}>
-                  {isRejected ? "Non-Billing Classification" : "Commercial Schema"}
+                  {isRejected ? `${documentType} Classification` : "Commercial Schema"}
                 </span>
               </div>
             </div>
@@ -1682,7 +1702,7 @@ export default function DocumentDetailsPage({
                 }}
               >
                 {isRejected
-                  ? "Non-billing document: No commercial line items or billable fees exist in this file."
+                  ? `Classified as ${documentType}: No commercial billing line items or payable charges detected in this document.`
                   : "No itemized line items detected. Check raw OCR text."}
               </div>
             ) : (
