@@ -1,40 +1,9 @@
 import type {
-  DocFilters, DocumentOut, EventOut, InvoiceData, PageOut, ResultOut, SearchHit, Stats, UploadItem,
+  DocFilters, DocumentOut, EventOut, InvoiceData, ResultOut, SearchHit, Stats, UploadItem,
 } from "./types";
 
-const API_HOST = typeof window !== "undefined"
-  ? (process.env.NEXT_PUBLIC_API_URL || "https://docuintel-backend-wpio.onrender.com")
-  : (process.env.NEXT_PUBLIC_API_URL || process.env.BACKEND_URL || "https://docuintel-backend-wpio.onrender.com");
-const BASE = API_HOST ? `${API_HOST.replace(/\/$/, "")}/api` : "https://docuintel-backend-wpio.onrender.com/api";
-
-export const OCR_HOST = typeof window !== "undefined"
-  ? (process.env.NEXT_PUBLIC_OCR_URL || "https://task-ocr-model.onrender.com")
-  : (process.env.NEXT_PUBLIC_OCR_URL || "https://task-ocr-model.onrender.com");
-
-export async function pingOcrService(): Promise<boolean> {
-  try {
-    const res = await fetch(`${OCR_HOST}/health`, { method: "GET", cache: "no-store" });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
-
-const TOKEN_KEY = "docuintel_jwt_token";
-
-export function getStoredToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-export function setStoredToken(token: string | null): void {
-  if (typeof window === "undefined") return;
-  if (token) {
-    localStorage.setItem(TOKEN_KEY, token);
-  } else {
-    localStorage.removeItem(TOKEN_KEY);
-  }
-}
+// Default to the same-origin Next.js proxy (app/api/[...path]); set NEXT_PUBLIC_API_URL only to call the backend directly.
+const BASE = process.env.NEXT_PUBLIC_API_URL ? `${process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, "")}/api` : "/api";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -43,17 +12,7 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const headers = new Headers(init?.headers || {});
-  const token = getStoredToken();
-  if (token && !headers.has("Authorization")) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
-
-  const res = await fetch(`${BASE}${path}`, {
-    cache: "no-store",
-    ...init,
-    headers,
-  });
+  const res = await fetch(`${BASE}${path}`, { cache: "no-store", ...init });
 
   if (!res.ok) {
     let detail = res.statusText;
@@ -78,30 +37,6 @@ export function buildQuery(params: Record<string, string | number | boolean | un
 }
 
 export const api = {
-  // Auth API
-  login: async (email: string, password: string) => {
-    const data = await request<{ access_token: string; token_type: string; user: any }>("/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-    setStoredToken(data.access_token);
-    return data;
-  },
-  register: async (email: string, password: string, name?: string) => {
-    const data = await request<{ access_token: string; token_type: string; user: any }>("/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, name }),
-    });
-    setStoredToken(data.access_token);
-    return data;
-  },
-  logout: () => {
-    setStoredToken(null);
-  },
-  getMe: () => request<{ authenticated: boolean; user: any }>("/auth/me"),
-
   // Documents & Processing API
   upload(files: File[]): Promise<UploadItem[]> {
     const form = new FormData();
@@ -112,7 +47,6 @@ export const api = {
     request<DocumentOut[]>(`/documents${buildQuery({ limit: 100, ...f })}`),
   getDocument: (id: string) => request<DocumentOut>(`/documents/${id}`),
   getResults: (id: string) => request<ResultOut[]>(`/documents/${id}/results`),
-  getPages: (id: string, offset = 0, limit = 50) => request<PageOut[]>(`/documents/${id}/pages${buildQuery({ offset, limit })}`),
   getEvents: (id: string) => request<EventOut[]>(`/documents/${id}/events`),
   reprocess: (id: string, force = false) =>
     request<DocumentOut>(`/documents/${id}/reprocess${buildQuery({ force })}`, { method: "POST" }),
