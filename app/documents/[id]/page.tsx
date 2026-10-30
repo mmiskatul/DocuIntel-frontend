@@ -36,6 +36,7 @@ export default function DocumentDetailsPage({
 
   const [doc, setDoc] = useState<DocumentOut | null>(null);
   const [results, setResults] = useState<ResultOut[]>([]);
+  const [invoiceIdx, setInvoiceIdx] = useState(0); // which invoice of a multi-invoice document is shown
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -108,7 +109,7 @@ export default function DocumentDetailsPage({
     );
   }
 
-  const currentResult: any = results[0] || {};
+  const currentResult: any = results[Math.min(invoiceIdx, Math.max(results.length - 1, 0))] || {};
   const data = currentResult.data || {};
   const rawText: string = data.raw_text || currentResult.raw_text || "";
   const pageTexts = parsePagesFromText(rawText);
@@ -270,7 +271,7 @@ export default function DocumentDetailsPage({
       if (editFields.tax !== "") corrections.tax = parseFloat(editFields.tax);
       if (editFields.total !== "") corrections.total = parseFloat(editFields.total);
 
-      await api.correctDocument(doc.id, corrections);
+      await api.correctDocument(doc.id, corrections, undefined, currentResult.id);
       setNotice({ type: "success", text: "✓ Manually corrected values saved and synchronized into database & vector store!" });
       setEditMode(false);
       void loadData();
@@ -570,6 +571,30 @@ export default function DocumentDetailsPage({
       </div>
 
       {/* Notice Toast */}
+      {results.length > 1 && (
+        <div role="tablist" aria-label="Invoices in this document" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", margin: "0 0 12px 0" }}>
+          <span style={{ fontSize: 13, color: "#475569", fontWeight: 600 }}>{results.length} invoices in this document:</span>
+          {results.map((r: any, i: number) => (
+            <button
+              key={r.id ?? i}
+              role="tab"
+              aria-selected={i === invoiceIdx}
+              onClick={() => { setInvoiceIdx(i); setEditMode(false); }}
+              style={{
+                padding: "4px 10px", borderRadius: 6, fontSize: 12, cursor: "pointer",
+                border: `1px solid ${i === invoiceIdx ? "#2563eb" : "#cbd5e1"}`,
+                background: i === invoiceIdx ? "#eff6ff" : "#ffffff",
+                color: r.needs_review && !r.reviewed ? "#b45309" : "#0f172a",
+              }}
+            >
+              {r.invoice_number || `Invoice ${i + 1}`}
+              {r.data?.page_range ? ` · p.${r.data.page_range[0]}–${r.data.page_range[1]}` : ""}
+              {r.needs_review && !r.reviewed ? " ⚠" : ""}
+            </button>
+          ))}
+        </div>
+      )}
+
       {notice && (
         <div
           style={{
