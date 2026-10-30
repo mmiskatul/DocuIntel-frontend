@@ -3,6 +3,9 @@ export type DocStatus = "queued" | "processing" | "completed" | "needs_review" |
 export interface DocSummary {
   invoice_number?: string | null;
   supplier_name?: string | null;
+  customer_name?: string | null;
+  subtotal?: number | null;
+  tax?: number | null;
   total?: number | null;
   currency?: string | null;
   invoice_date?: string | null;

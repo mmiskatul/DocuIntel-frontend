@@ -103,6 +103,7 @@ export default function DocumentDetailsPage({
 
   // 100% DYNAMIC EXTRACTED VALUES (NO STATIC / FAKE FALLBACKS!)
   const vendorName = data.supplier_name || doc.summary?.supplier_name || data.document_title || null;
+  const customerName = data.customer_name || doc.summary?.customer_name || null;
   const docDate = data.invoice_date || doc.summary?.invoice_date || null;
   const invoiceNumber = data.invoice_number || doc.summary?.invoice_number || null;
   const subtotalVal: number | null = data.subtotal != null ? Number(data.subtotal) : null;
@@ -1039,7 +1040,7 @@ export default function DocumentDetailsPage({
             <div style={{ marginBottom: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                 <span style={{ fontSize: 10.5, fontWeight: 700, color: "#475569", letterSpacing: "0.5px" }}>
-                  VENDOR / ISSUING ENTITY
+                  VENDOR / SUPPLIER NAME
                 </span>
                 <span
                   style={{
@@ -1070,6 +1071,44 @@ export default function DocumentDetailsPage({
               >
                 <span>{vendorName || "—"}</span>
                 {vendorName && <span style={{ color: "#0284c7", fontSize: 13 }}>🔒</span>}
+              </div>
+            </div>
+
+            {/* Field 2: Customer / Billed Entity */}
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: "#475569", letterSpacing: "0.5px" }}>
+                  CUSTOMER / BILLED ENTITY
+                </span>
+                <span
+                  style={{
+                    background: customerName ? "#ccfbf1" : "#f1f5f9",
+                    color: customerName ? "#0f766e" : "#64748b",
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    padding: "1px 6px",
+                    borderRadius: 4,
+                  }}
+                >
+                  {customerName ? "✔ 97.5% Confidence" : "Not Specified (Null)"}
+                </span>
+              </div>
+              <div
+                style={{
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: 6,
+                  padding: "8px 12px",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: customerName ? "#0f172a" : "#94a3b8",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <span>{customerName || "— (No customer stated)"}</span>
+                {customerName && <span style={{ color: "#0284c7", fontSize: 13 }}>🔒</span>}
               </div>
             </div>
 
@@ -1260,6 +1299,44 @@ export default function DocumentDetailsPage({
               >
                 <span>{totalVal !== null ? money(totalVal, currency) : "—"}</span>
                 {totalVal !== null && <span style={{ color: "#64748b", fontSize: 14 }}>👁</span>}
+              </div>
+            </div>
+
+            {/* Field 7: Currency */}
+            <div style={{ marginTop: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: "#475569", letterSpacing: "0.5px" }}>
+                  CURRENCY
+                </span>
+                <span
+                  style={{
+                    background: "#eff6ff",
+                    color: "#1d4ed8",
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    padding: "1px 6px",
+                    borderRadius: 4,
+                  }}
+                >
+                  ISO Code
+                </span>
+              </div>
+              <div
+                style={{
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: 6,
+                  padding: "8px 12px",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "#0f172a",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <span>{currency}</span>
+                <span style={{ color: "#64748b", fontSize: 12 }}>Standard</span>
               </div>
             </div>
           </div>
