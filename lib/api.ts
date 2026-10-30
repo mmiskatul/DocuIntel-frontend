@@ -1,5 +1,5 @@
 import type {
-  DocFilters, DocumentOut, EventOut, InvoiceData, ResultOut, SearchHit, Stats, UploadItem,
+  CrossVerifyReport, DocFilters, DocumentOut, EventOut, InvoiceData, ResultOut, SearchHit, Stats, UploadItem,
 } from "./types";
 
 // Default to the same-origin Next.js proxy (app/api/[...path]); set NEXT_PUBLIC_API_URL only to call the backend directly.
@@ -69,6 +69,12 @@ export const api = {
   ragSearch: (q: string, provider: "auto" | "openai" | "anthropic" | "deepseek" | "grok" = "auto") =>
     request<import("./types").RAGResult>(`/search/rag${buildQuery({ q, provider })}`),
   stats: () => request<Stats>("/stats"),
+  crossVerify: (left: string, right: string, flagMismatches = true) =>
+    request<CrossVerifyReport>("/documents/cross-verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ left_document_id: left, right_document_id: right, flag_mismatches: flagMismatches }),
+    }),
   fileUrl: (id: string) => `${BASE}/documents/${id}/file`,
   approve: (id: string, reviewer?: string) =>
     request<{ success: boolean; status: string; stage: string; vector_stored?: boolean }>(`/documents/${id}/approve`, {

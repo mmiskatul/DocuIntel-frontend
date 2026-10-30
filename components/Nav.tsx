@@ -50,6 +50,7 @@ export function Nav() {
         <nav className="nav">
           {link("/", "📄 Documents", path === "/" || path.startsWith("/documents"))}
           {link("/search", "🔍 AI Search", path.startsWith("/search"))}
+          {link("/cross-verify", "⚖️ Cross-Verify", path.startsWith("/cross-verify"))}
         </nav>
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "10px" }}>

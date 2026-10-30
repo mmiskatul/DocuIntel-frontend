@@ -149,3 +149,26 @@ export interface RAGResult {
 }
 
 export const IN_FLIGHT: DocStatus[] = ["queued", "processing"];
+
+export interface CrossVerifyDifference {
+  field: string;
+  left: string | number | null;
+  right: string | number | null;
+  severity: "error" | "warning";
+  difference?: number;
+}
+
+export interface CrossVerifyReport {
+  verdict: "match" | "discrepancies_found" | "no_comparable_invoices";
+  summary: {
+    left_invoices: number; right_invoices: number; matched: number; mismatched: number;
+    only_in_left: number; only_in_right: number; without_invoice_number: number;
+  };
+  matched: { invoice_number: string }[];
+  mismatched: { invoice_number: string; differences: CrossVerifyDifference[] }[];
+  only_in_left: { invoice_number: string; total: number | null; supplier_name: string | null }[];
+  only_in_right: { invoice_number: string; total: number | null; supplier_name: string | null }[];
+  left_document: { id: string; filename: string };
+  right_document: { id: string; filename: string };
+  flagged_results: number;
+}
