@@ -51,6 +51,19 @@ export default function DocumentDetailsPage({
   const [manualReconcileOpen, setManualReconcileOpen] = useState(false);
   const [customTotal, setCustomTotal] = useState("");
 
+  // Manual Corrections Mode State
+  const [editMode, setEditMode] = useState(false);
+  const [editFields, setEditFields] = useState({
+    supplier_name: "",
+    customer_name: "",
+    invoice_date: "",
+    invoice_number: "",
+    subtotal: "",
+    tax: "",
+    total: "",
+    currency: "USD",
+  });
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -228,7 +241,47 @@ export default function DocumentDetailsPage({
     }
   };
 
-  // 6. Re-run OCR
+  // 6. Manual Value Corrections
+  const startEditing = () => {
+    setEditFields({
+      supplier_name: vendorName || "",
+      customer_name: customerName || "",
+      invoice_date: docDate || "",
+      invoice_number: invoiceNumber || "",
+      subtotal: subtotalVal !== null ? String(subtotalVal) : "",
+      tax: taxVal !== null ? String(taxVal) : "",
+      total: totalVal !== null ? String(totalVal) : "",
+      currency: currency || "USD",
+    });
+    setEditMode(true);
+  };
+
+  const handleSaveCorrections = async () => {
+    setBusy(true);
+    try {
+      const corrections: Record<string, any> = {
+        supplier_name: editFields.supplier_name.trim() || undefined,
+        customer_name: editFields.customer_name.trim() || undefined,
+        invoice_date: editFields.invoice_date.trim() || undefined,
+        invoice_number: editFields.invoice_number.trim() || undefined,
+        currency: editFields.currency.trim() || "USD",
+      };
+      if (editFields.subtotal !== "") corrections.subtotal = parseFloat(editFields.subtotal);
+      if (editFields.tax !== "") corrections.tax = parseFloat(editFields.tax);
+      if (editFields.total !== "") corrections.total = parseFloat(editFields.total);
+
+      await api.correctDocument(doc.id, corrections);
+      setNotice({ type: "success", text: "✓ Manually corrected values saved and synchronized into database & vector store!" });
+      setEditMode(false);
+      void loadData();
+    } catch (err: any) {
+      setNotice({ type: "error", text: `Correction failed: ${err.message}` });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // 7. Re-run OCR
   const handleRerunOcr = async () => {
     setBusy(true);
     try {
@@ -1105,11 +1158,181 @@ export default function DocumentDetailsPage({
                   Extracted Key-Value Entities
                 </span>
               </div>
-              <span style={{ fontSize: 11.5, color: "#64748b", fontWeight: 500 }}>
-                {isRejected ? "Non-Billing Classification" : "Commercial Schema"}
-              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {!isRejected && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (editMode) {
+                        setEditMode(false);
+                      } else {
+                        startEditing();
+                      }
+                    }}
+                    style={{
+                      background: editMode ? "#f1f5f9" : "#eff6ff",
+                      color: editMode ? "#475569" : "#2563eb",
+                      border: `1px solid ${editMode ? "#cbd5e1" : "#bfdbfe"}`,
+                      borderRadius: 4,
+                      padding: "3px 10px",
+                      fontSize: 11.5,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {editMode ? "✕ Cancel Editing" : "✎ Correct Values"}
+                  </button>
+                )}
+                <span style={{ fontSize: 11.5, color: "#64748b", fontWeight: 500 }}>
+                  {isRejected ? "Non-Billing Classification" : "Commercial Schema"}
+                </span>
+              </div>
             </div>
 
+            {editMode ? (
+              <form onSubmit={(e) => { e.preventDefault(); void handleSaveCorrections(); }}>
+                <div style={{ display: "grid", gap: 11, marginBottom: 16 }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569", marginBottom: 3 }}>
+                      VENDOR / SUPPLIER NAME
+                    </label>
+                    <input
+                      type="text"
+                      value={editFields.supplier_name}
+                      onChange={(e) => setEditFields({ ...editFields, supplier_name: e.target.value })}
+                      placeholder="e.g. Acme Corp"
+                      style={{ width: "100%", padding: "7px 10px", fontSize: 13, border: "1px solid #cbd5e1", borderRadius: 6 }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569", marginBottom: 3 }}>
+                      CUSTOMER / BILLED ENTITY
+                    </label>
+                    <input
+                      type="text"
+                      value={editFields.customer_name}
+                      onChange={(e) => setEditFields({ ...editFields, customer_name: e.target.value })}
+                      placeholder="e.g. Global Tech Inc."
+                      style={{ width: "100%", padding: "7px 10px", fontSize: 13, border: "1px solid #cbd5e1", borderRadius: 6 }}
+                    />
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569", marginBottom: 3 }}>
+                        DOCUMENT DATE
+                      </label>
+                      <input
+                        type="text"
+                        value={editFields.invoice_date}
+                        onChange={(e) => setEditFields({ ...editFields, invoice_date: e.target.value })}
+                        placeholder="YYYY-MM-DD"
+                        style={{ width: "100%", padding: "7px 10px", fontSize: 13, border: "1px solid #cbd5e1", borderRadius: 6 }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569", marginBottom: 3 }}>
+                        INVOICE NUMBER
+                      </label>
+                      <input
+                        type="text"
+                        value={editFields.invoice_number}
+                        onChange={(e) => setEditFields({ ...editFields, invoice_number: e.target.value })}
+                        placeholder="INV-12345"
+                        style={{ width: "100%", padding: "7px 10px", fontSize: 13, border: "1px solid #cbd5e1", borderRadius: 6 }}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569", marginBottom: 3 }}>
+                        SUBTOTAL
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={editFields.subtotal}
+                        onChange={(e) => setEditFields({ ...editFields, subtotal: e.target.value })}
+                        placeholder="0.00"
+                        style={{ width: "100%", padding: "7px 10px", fontSize: 13, border: "1px solid #cbd5e1", borderRadius: 6 }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569", marginBottom: 3 }}>
+                        TAX
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={editFields.tax}
+                        onChange={(e) => setEditFields({ ...editFields, tax: e.target.value })}
+                        placeholder="0.00"
+                        style={{ width: "100%", padding: "7px 10px", fontSize: 13, border: "1px solid #cbd5e1", borderRadius: 6 }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569", marginBottom: 3 }}>
+                        TOTAL
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={editFields.total}
+                        onChange={(e) => setEditFields({ ...editFields, total: e.target.value })}
+                        placeholder="0.00"
+                        style={{ width: "100%", padding: "7px 10px", fontSize: 13, border: "1px solid #cbd5e1", borderRadius: 6 }}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569", marginBottom: 3 }}>
+                      CURRENCY
+                    </label>
+                    <input
+                      type="text"
+                      value={editFields.currency}
+                      onChange={(e) => setEditFields({ ...editFields, currency: e.target.value })}
+                      placeholder="USD"
+                      style={{ width: "100%", padding: "7px 10px", fontSize: 13, border: "1px solid #cbd5e1", borderRadius: 6 }}
+                    />
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button
+                    type="submit"
+                    disabled={busy}
+                    style={{
+                      background: "#2563eb",
+                      color: "#ffffff",
+                      border: "none",
+                      borderRadius: 6,
+                      padding: "8px 18px",
+                      fontSize: 13,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {busy ? "Saving..." : "✓ Save Corrected Values"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditMode(false)}
+                    style={{
+                      background: "#f1f5f9",
+                      color: "#475569",
+                      border: "1px solid #cbd5e1",
+                      borderRadius: 6,
+                      padding: "8px 14px",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
             {/* Field 1: Vendor / Issuer */}
             <div style={{ marginBottom: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
@@ -1296,7 +1519,16 @@ export default function DocumentDetailsPage({
                 }}
               >
                 <span>{subtotalVal !== null ? money(subtotalVal, currency) : "—"}</span>
-                {subtotalVal !== null && <span style={{ color: "#64748b", fontSize: 13, cursor: "pointer" }}>✎</span>}
+                {subtotalVal !== null && (
+                  <button
+                    type="button"
+                    onClick={startEditing}
+                    title="Correct this value"
+                    style={{ background: "none", border: "none", color: "#64748b", fontSize: 13, cursor: "pointer", padding: 0 }}
+                  >
+                    ✎
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1413,6 +1645,8 @@ export default function DocumentDetailsPage({
                 <span style={{ color: "#64748b", fontSize: 12 }}>Standard</span>
               </div>
             </div>
+            </>
+          )}
           </div>
 
           {/* CARD 3: REAL PARSED LINE ITEMS (100% DYNAMIC) */}

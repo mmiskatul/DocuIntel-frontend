@@ -118,6 +118,12 @@ export const api = {
     request<DocumentOut>(`/documents/${id}/reprocess${buildQuery({ force })}`, { method: "POST" }),
   reprocessAllFailed: () => request<{ requeued: number }>("/documents/reprocess-failed", { method: "POST" }),
   deleteDocument: (id: string) => request<void>(`/documents/${id}`, { method: "DELETE" }),
+  correctDocument: (docId: string, corrections: Record<string, any>, reviewer = "auditor@docuintel.com") =>
+    request<any>(`/documents/${docId}/correct`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ corrections, reviewer }),
+    }),
   correct: (resultId: number, corrections: Partial<InvoiceData>, confirm: boolean, reviewer?: string) =>
     request<ResultOut>(`/results/${resultId}`, {
       method: "PATCH",
