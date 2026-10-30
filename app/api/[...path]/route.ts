@@ -19,9 +19,8 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
   const contentType = req.headers.get("content-type");
   if (contentType) headers.set("content-type", contentType);
 
-  // Forward JWT Authorization header from client
-  const authHeader = req.headers.get("authorization");
-  if (authHeader) headers.set("authorization", authHeader);
+  // Server-side API key: never exposed to the browser
+  if (process.env.BACKEND_API_KEY) headers.set("x-api-key", process.env.BACKEND_API_KEY);
 
   const hasBody = req.method !== "GET" && req.method !== "HEAD";
   try {
