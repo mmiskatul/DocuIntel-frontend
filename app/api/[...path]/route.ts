@@ -40,6 +40,9 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
       if (v) out.set(h, v);
     }
     out.set("cache-control", "no-store");
+    // TEMPORARY diagnostic (remove after setup): whether the server-side key is configured, and its length. Never the value.
+    const k = process.env.BACKEND_API_KEY;
+    out.set("x-proxy-key", k ? `set;len=${k.length}` : "missing");
     return new Response(upstream.status === 204 ? null : upstream.body, { status: upstream.status, headers: out });
   } catch {
     return Response.json({ detail: "The processing backend is unreachable" }, { status: 502 });
