@@ -11,6 +11,22 @@ export class ApiError extends Error {
   }
 }
 
+/** FastAPI sends a plain string for most errors and a list of {loc, msg} for validation errors; show either as readable text. */
+export function explain(detail: unknown): string {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const parts = detail.map((d) => {
+      if (d && typeof d === "object" && "msg" in d) {
+        const where = Array.isArray((d as any).loc) ? (d as any).loc.filter((x: unknown) => x !== "query" && x !== "body").join(".") : "";
+        return where ? `${where}: ${(d as any).msg}` : String((d as any).msg);
+      }
+      return typeof d === "string" ? d : JSON.stringify(d);
+    });
+    if (parts.length) return parts.join("; ");
+  }
+  return JSON.stringify(detail);
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, { cache: "no-store", ...init });
 
@@ -18,7 +34,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     let detail = res.statusText;
     try {
       const body = await res.json();
-      detail = typeof body.message === "string" ? body.message : (typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail ?? body));
+      detail = typeof body.message === "string" ? body.message : explain(body.detail ?? body);
     } catch { /* non-JSON error body */ }
     throw new ApiError(res.status, detail);
   }

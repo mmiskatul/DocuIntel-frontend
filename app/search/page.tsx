@@ -67,7 +67,8 @@ export default function SearchPage() {
         await dispatch(runSearch({ q: text.trim(), mode: m === "semantic" || m === "keyword" ? m : "hybrid" })).unwrap();
       }
     } catch (err: any) {
-      setLocalError(err.message || "The search failed. Try again.");
+      // a failed search store thunk throws its message as plain text, not as an Error
+      setLocalError(typeof err === "string" ? err : err?.message || "The search failed. Try again.");
     }
   }
 
