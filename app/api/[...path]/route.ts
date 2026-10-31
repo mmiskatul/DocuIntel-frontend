@@ -23,6 +23,8 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
 
   // Server-side API key: never exposed to the browser
   if (process.env.BACKEND_API_KEY) headers.set("x-api-key", process.env.BACKEND_API_KEY);
+  // ngrok's free tier answers browser-like requests with an interstitial page unless this header is present
+  headers.set("ngrok-skip-browser-warning", "1");
 
   const hasBody = req.method !== "GET" && req.method !== "HEAD";
   try {
