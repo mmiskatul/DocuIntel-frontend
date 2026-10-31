@@ -6,7 +6,8 @@ import { bytes } from "@/lib/format";
 import { useAppDispatch } from "@/store";
 import { uploadDocuments } from "@/store/documentsSlice";
 
-export const ACCEPT = [".pdf", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".xlsx", ".xls", ".csv", ".doc", ".docx"];
+// Must match ALLOWED_EXTENSIONS in the backend (app/config.py)
+export const ACCEPT = [".pdf", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp", ".xlsx", ".xls", ".csv"];
 export const MAX_MB = 100;
 
 export function validateFile(f: File): string | null {
