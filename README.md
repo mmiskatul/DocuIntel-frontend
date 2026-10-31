@@ -37,6 +37,7 @@ npm run dev          # http://localhost:3000
 npm run build        # production build
 npm run start        # serve the production build
 npm run typecheck    # TypeScript check
+npm test             # unit tests (Vitest)
 ```
 
 ### Environment variables
@@ -52,6 +53,13 @@ Do **not** set `NEXT_PUBLIC_API_URL`: the browser must talk to the site's own `/
 
 Set `BACKEND_URL` and `BACKEND_API_KEY` in the project's environment variables, then redeploy. Changing a variable does nothing for a deployment that
 is already live. Requests above about 4.5 MB are refused by Vercel itself, so very large uploads should go to a self-hosted copy.
+
+## Tests
+
+`npm test` runs 41 unit tests (Vitest) against the real Redux store with the API client replaced by a stand-in, so they need no backend. They cover the
+behaviour that is easy to get wrong: actions that update the screen at once and are undone when the server refuses, a slow older answer not overwriting
+a newer one, searches that start from a clean page, delete and its overlay, comparing documents without changing them, the confirmation popup, saved
+preferences, and the formatting helpers.
 
 ## How it is built
 
