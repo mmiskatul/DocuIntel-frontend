@@ -302,3 +302,11 @@ table.t { width: 100%; border-collapse: collapse; }
 .toast-info { background: var(--working-soft); border-color: #b5c9e4; color: var(--working-ink); }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
 @media (max-width: 720px) { .toaster { right: 16px; left: 16px; bottom: 16px; width: auto; } }
+
+/* ---------- Busy overlay (centred spinner while the user waits) ---------- */
+.overlay { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(21, 34, 43, .38); backdrop-filter: blur(2px); animation: fade-in .12s ease-out; }
+.overlay-card { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 28px 40px; min-width: 280px; max-width: min(440px, calc(100vw - 32px)); text-align: center; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: 0 16px 48px rgba(21, 34, 43, .28); outline: none; }
+.overlay-card svg { color: var(--ink); }
+.overlay-card strong { font-size: 15px; word-break: break-word; }
+.overlay-card span { color: var(--ink-3); font-size: 13px; }
+@keyframes fade-in { from { opacity: 0; } }

@@ -157,6 +157,58 @@ describe("actions are applied at once and undone when the server refuses", () =>
     expect(s.getState().notifications.toasts.some((t) => t.kind === "error" && t.text.includes("a.pdf"))).toBe(true);
   });
 
+  it("delete: the row leaves at once, the spinner says Deleting, then Updating the list, then it clears and a toast confirms", async () => {
+    const s = makeStore();
+    mocked.listDocuments.mockResolvedValue([doc("a"), doc("b")]);
+    await s.dispatch(fetchDocuments());
+    const pending = () => s.getState().ui.pending;
+    let finishDelete!: () => void;
+    mocked.deleteDocument.mockImplementation(() => new Promise<void>((r) => { finishDelete = r; }));
+
+    const run = s.dispatch(deleteDocument({ id: "a", filename: "a.pdf" }));
+    expect(s.getState().documents.items.map((d) => d.id)).toEqual(["b"]);        // gone immediately
+    expect(pending()).toEqual([{ id: "a", label: "Deleting a.pdf…" }]);            // spinner is up
+
+    let refreshed!: (v: DocumentOut[]) => void;
+    mocked.listDocuments.mockImplementation(() => new Promise((r) => { refreshed = r; }));
+    finishDelete();
+    await vi.waitFor(() => expect(pending()[0]?.label).toBe("Updating the list…")); // second step, still showing
+    expect(s.getState().notifications.toasts).toHaveLength(0);                       // not confirmed until the table is refreshed
+
+    refreshed([doc("b")]);
+    await run;
+    expect(pending()).toEqual([]);                                                   // spinner gone
+    expect(s.getState().documents.items.map((d) => d.id)).toEqual(["b"]);
+    expect(s.getState().notifications.toasts[0]).toMatchObject({ kind: "success", text: "Deleted a.pdf." });
+  });
+
+  it("a refused delete clears the spinner, brings the row back and explains why", async () => {
+    const s = makeStore();
+    mocked.listDocuments.mockResolvedValue([doc("a")]);
+    await s.dispatch(fetchDocuments());
+    mocked.deleteDocument.mockRejectedValue(new Error("Server busy"));
+    await s.dispatch(deleteDocument({ id: "a", filename: "a.pdf" }));
+    expect(s.getState().ui.pending).toEqual([]);
+    expect(s.getState().documents.items.map((d) => d.id)).toEqual(["a"]);
+    expect(s.getState().notifications.toasts.some((t) => t.kind === "error" && t.text.includes("Server busy"))).toBe(true);
+  });
+
+  it("two deletes at once keep one spinner until both are done", async () => {
+    const s = makeStore();
+    mocked.listDocuments.mockResolvedValue([doc("a"), doc("b")]);
+    await s.dispatch(fetchDocuments());
+    const done: Array<() => void> = [];
+    mocked.deleteDocument.mockImplementation(() => new Promise<void>((r) => { done.push(r); }));
+    const r1 = s.dispatch(deleteDocument({ id: "a", filename: "a.pdf" }));
+    const r2 = s.dispatch(deleteDocument({ id: "b", filename: "b.pdf" }));
+    expect(s.getState().ui.pending).toHaveLength(2);
+    mocked.listDocuments.mockResolvedValue([]);
+    done[0](); await r1;
+    expect(s.getState().ui.pending.map((p) => p.id)).toEqual(["b"]);
+    done[1](); await r2;
+    expect(s.getState().ui.pending).toEqual([]);
+  });
+
   it("uploads appear in the list immediately as queued, once, with a confirmation and a note about refused files", async () => {
     const s = makeStore();
     mocked.upload.mockResolvedValue([

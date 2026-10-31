@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { Provider } from "react-redux";
+import { BusyOverlay } from "@/components/BusyOverlay";
 import { Sync } from "@/components/Sync";
 import { Toaster } from "@/components/Toaster";
 import { makeStore, type AppStore } from "@/store";
@@ -32,6 +33,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       <Sync />
       {children}
       <Toaster />
+      <BusyOverlay />
     </Provider>
   );
 }

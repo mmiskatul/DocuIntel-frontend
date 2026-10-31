@@ -5,7 +5,7 @@ import { fileKind, money } from "@/lib/format";
 import { IN_FLIGHT, type DocumentOut, type ResultOut, type Stats } from "@/lib/types";
 import type { AppDispatch, RootState } from "./index";
 import { notify } from "./notificationsSlice";
-import { setConnection } from "./uiSlice";
+import { endPending, setConnection, startPending, updatePending } from "./uiSlice";
 
 export type StatusFilter = "All" | "Needs Review" | "Completed" | "Processing" | "Failed";
 
@@ -200,17 +200,23 @@ export const deleteDocument = createAsyncThunk<string, { id: string; filename?: 
   async ({ id, filename }, thunkApi) => {
     const dispatch = thunkApi.dispatch as unknown as AppDispatch;
     const { rejectWithValue } = thunkApi;
-    dispatch(removeDocument(id)); // gone from the screen at once
+    // 1. the row leaves the screen at once, and a centred spinner says what is happening while the server finishes
+    dispatch(startPending({ id, label: `Deleting ${filename ?? "the document"}…` }));
+    dispatch(removeDocument(id));
     try {
-      await api.deleteDocument(id);
+      await api.deleteDocument(id); // also removes the stored original
+      // 2. refresh the table from the server, then confirm
+      dispatch(updatePending({ id, label: "Updating the list…" }));
+      await dispatch(syncNow());
       dispatch(notify("success", `Deleted ${filename ?? "the document"}.`));
       return id;
     } catch (err) {
       const reason = message(err, "Delete failed");
       dispatch(notify("error", `Could not delete ${filename ?? "the document"}: ${reason}`));
+      await dispatch(syncNow()); // brings the row back, because the server still has it
       return rejectWithValue(reason);
     } finally {
-      dispatch(syncNow()); // restores the row if the delete failed
+      dispatch(endPending(id));
     }
   },
 );

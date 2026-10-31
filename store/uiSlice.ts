@@ -9,9 +9,11 @@ export interface UiState {
   viewMode: ViewMode;
   /** is the backend reachable? Set by the sync loop, shown in the top bar */
   connection: Connection;
+  /** slow work the user is waiting for (for example a delete): shown as a centred spinner with its label */
+  pending: { id: string; label: string }[];
 }
 
-const initialState: UiState = { zoom: 100, viewMode: "preview", connection: "unknown" };
+const initialState: UiState = { zoom: 100, viewMode: "preview", connection: "unknown", pending: [] };
 
 export const uiSlice = createSlice({
   name: "ui",
@@ -26,8 +28,18 @@ export const uiSlice = createSlice({
     setConnection(state, action: PayloadAction<Connection>) {
       state.connection = action.payload;
     },
+    startPending(state, action: PayloadAction<{ id: string; label: string }>) {
+      state.pending = [...state.pending.filter((p) => p.id !== action.payload.id), action.payload];
+    },
+    updatePending(state, action: PayloadAction<{ id: string; label: string }>) {
+      const p = state.pending.find((x) => x.id === action.payload.id);
+      if (p) p.label = action.payload.label;
+    },
+    endPending(state, action: PayloadAction<string>) {
+      state.pending = state.pending.filter((p) => p.id !== action.payload);
+    },
   },
 });
 
-export const { setZoom, setViewMode, setConnection } = uiSlice.actions;
+export const { setZoom, setViewMode, setConnection, startPending, updatePending, endPending } = uiSlice.actions;
 export default uiSlice.reducer;
