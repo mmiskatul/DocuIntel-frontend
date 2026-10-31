@@ -7,22 +7,29 @@ import { notify } from "./notificationsSlice";
 export interface VerifyState {
   left: string;
   right: string;
-  flag: boolean;
   report: CrossVerifyReport | null;
-  running: boolean;
+  /** "compare" = read-only; "flag" = the user asked to send the differences to review */
+  running: "compare" | "flag" | null;
   error: string | null;
 }
 
-const initialState: VerifyState = { left: "", right: "", flag: true, report: null, running: false, error: null };
+const initialState: VerifyState = { left: "", right: "", report: null, running: null, error: null };
 
-export const runCrossVerify = createAsyncThunk<CrossVerifyReport, void, { state: { verify: VerifyState }; rejectValue: string }>(
+/**
+ * Comparing never changes any document. Only `flag: true` (the "Send to review" button, pressed after the user has seen
+ * the differences) marks the mismatching invoices for review.
+ */
+export const runCrossVerify = createAsyncThunk<CrossVerifyReport, { flag: boolean }, { state: { verify: VerifyState }; rejectValue: string }>(
   "verify/run",
-  async (_, { getState, dispatch, rejectWithValue }) => {
-    const { left, right, flag } = getState().verify;
+  async ({ flag }, { getState, dispatch, rejectWithValue }) => {
+    const { left, right } = getState().verify;
     try {
       const report = await api.crossVerify(left, right, flag);
-      if (report.flagged_results > 0) {
-        dispatch(notify("info", `${report.flagged_results} invoice${report.flagged_results === 1 ? "" : "s"} sent to review.`));
+      if (flag) {
+        const n = report.flagged_results;
+        dispatch(notify(n > 0 ? "success" : "info", n > 0
+          ? `${n} invoice${n === 1 ? "" : "s"} sent to review. They are marked in both documents.`
+          : "Nothing needed to be sent: the differing invoices are already in review."));
         dispatch(fetchDocuments() as any);
         dispatch(fetchStats() as any);
       }
@@ -33,7 +40,7 @@ export const runCrossVerify = createAsyncThunk<CrossVerifyReport, void, { state:
   },
 );
 
-/** The comparison stays on screen when you leave the page and come back. */
+/** The choices and the result stay when you leave the page and come back. */
 export const verifySlice = createSlice({
   name: "verify",
   initialState,
@@ -41,13 +48,17 @@ export const verifySlice = createSlice({
     setLeft(state, action: PayloadAction<string>) {
       state.left = action.payload;
       state.report = null;
+      state.error = null;
     },
     setRight(state, action: PayloadAction<string>) {
       state.right = action.payload;
       state.report = null;
+      state.error = null;
     },
-    setFlag(state, action: PayloadAction<boolean>) {
-      state.flag = action.payload;
+    swapSides(state) {
+      [state.left, state.right] = [state.right, state.left];
+      state.report = null;
+      state.error = null;
     },
     clearReport(state) {
       state.report = null;
@@ -56,21 +67,21 @@ export const verifySlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      .addCase(runCrossVerify.pending, (state) => {
-        state.running = true;
+      .addCase(runCrossVerify.pending, (state, action) => {
+        state.running = action.meta.arg.flag ? "flag" : "compare";
         state.error = null;
-        state.report = null;
+        if (!action.meta.arg.flag) state.report = null; // a fresh comparison starts from a clean page
       })
       .addCase(runCrossVerify.fulfilled, (state, action) => {
-        state.running = false;
+        state.running = null;
         state.report = action.payload;
       })
       .addCase(runCrossVerify.rejected, (state, action) => {
-        state.running = false;
+        state.running = null;
         state.error = action.payload ?? "The comparison failed";
       });
   },
 });
 
-export const { setLeft, setRight, setFlag, clearReport } = verifySlice.actions;
+export const { setLeft, setRight, swapSides, clearReport } = verifySlice.actions;
 export default verifySlice.reducer;
