@@ -10,6 +10,7 @@ import {
 import FilePreview from "@/components/FilePreview";
 import { ProgressBar, StatusBadge } from "@/components/StatusBadge";
 import { api } from "@/lib/api";
+import { askConfirm } from "@/lib/confirm";
 import { bytes, fileKind, money, shortDate } from "@/lib/format";
 import { IN_FLIGHT, type ResultOut } from "@/lib/types";
 import { useAppDispatch, useAppSelector } from "@/store";
@@ -143,12 +144,24 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
       .unwrap().then(() => { setManualOpen(false); setCustomTotal(""); }).catch(() => undefined);
   };
 
-  const reject = () => {
-    if (confirm("Reject this document? It will be excluded from search.")) void dispatch(rejectDocument({ id: doc.id }));
+  const reject = async () => {
+    const yes = await askConfirm(dispatch, {
+      title: "Reject this document?",
+      message: `${doc.filename} will be excluded from search. You can still read it again or delete it later.`,
+      confirmLabel: "Reject document",
+      icon: "warning",
+    });
+    if (yes) void dispatch(rejectDocument({ id: doc.id }));
   };
 
-  const remove = () => {
-    if (!confirm(`Delete ${doc.filename}? This cannot be undone.`)) return;
+  const remove = async () => {
+    const yes = await askConfirm(dispatch, {
+      title: "Delete this document?",
+      message: `${doc.filename} will be removed together with its extracted data and its stored original file. This cannot be undone.`,
+      confirmLabel: "Delete document",
+      icon: "trash",
+    });
+    if (!yes) return;
     router.push("/"); // the document leaves the list at once; if the delete fails it comes back with a message
     void dispatch(deleteDocument({ id: doc.id, filename: doc.filename }));
   };

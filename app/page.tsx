@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Download, RefreshCw, Search, TriangleAlert } from "lucide-react";
 import { DocTable } from "@/components/DocTable";
 import { UploadZone } from "@/components/UploadZone";
+import { askConfirm } from "@/lib/confirm";
 import { duration } from "@/lib/format";
 import { useAppDispatch, useAppSelector } from "@/store";
 import {
@@ -53,8 +54,14 @@ export default function DocumentsPage() {
     dispatch(notify("success", `Exported ${target.length} document${target.length === 1 ? "" : "s"} to CSV.`));
   };
 
-  const remove = (d: DocumentOut) => {
-    if (confirm(`Delete ${d.filename}? This cannot be undone.`)) void dispatch(deleteDocument({ id: d.id, filename: d.filename }));
+  const remove = async (d: DocumentOut) => {
+    const yes = await askConfirm(dispatch, {
+      title: "Delete this document?",
+      message: `${d.filename} will be removed together with its extracted data and its stored original file. This cannot be undone.`,
+      confirmLabel: "Delete document",
+      icon: "trash",
+    });
+    if (yes) void dispatch(deleteDocument({ id: d.id, filename: d.filename }));
   };
 
   const STRIP: { key: StatusFilter; label: string; n: number; tone: string }[] = [
