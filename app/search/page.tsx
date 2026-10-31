@@ -97,7 +97,7 @@ export default function SearchPage() {
       <div className="page-head">
         <div>
           <h1 className="page-title">Search</h1>
-          <p className="page-sub">Ask questions in plain language, or find the document you need. Only verified and reviewed documents are searchable.</p>
+          <p className="page-sub">Ask questions in plain language, or find the document you need. Answers are written from verified documents.</p>
         </div>
       </div>
 
