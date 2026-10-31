@@ -23,6 +23,26 @@ export function when(iso: string): string {
   return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
+export type FileKind = "pdf" | "image" | "sheet" | "other";
+
+/** What kind of file this is, from its MIME type or, failing that, its extension. */
+export function fileKind(fileType: string | null | undefined, filename: string | null | undefined): { kind: FileKind; label: string } {
+  const t = (fileType || "").toLowerCase();
+  const ext = (filename || "").split(".").pop()?.toLowerCase() || "";
+  if (t === "application/pdf" || ext === "pdf") return { kind: "pdf", label: "PDF" };
+  if (t.startsWith("image/") || ["png", "jpg", "jpeg", "tif", "tiff", "bmp", "webp"].includes(ext)) return { kind: "image", label: ext ? ext.toUpperCase() : "IMG" };
+  if (t.includes("sheet") || t.includes("excel") || t === "text/csv" || ["xls", "xlsx", "csv"].includes(ext)) return { kind: "sheet", label: ext === "csv" ? "CSV" : "XLS" };
+  return { kind: "other", label: ext ? ext.toUpperCase().slice(0, 4) : "FILE" };
+}
+
+/** A date for display: the printed invoice date when we have it, otherwise the upload date. */
+export function shortDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+}
+
 export const STATUS_LABEL: Record<string, string> = {
   queued: "Queued", processing: "Processing", completed: "Completed", needs_review: "Needs review", failed: "Failed", rejected: "Rejected",
 };

@@ -1,74 +1,62 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { api } from "@/lib/api";
-import { bytes, money } from "@/lib/format";
+import { use, useCallback, useEffect, useState } from "react";
+import {
+  AlertTriangle, ArrowLeft, Check, CheckCircle2, ChevronLeft, ChevronRight, FileSearch, Info, Loader2,
+  Minus, Pencil, Plus, RotateCw, ShieldX, Trash2, X, XCircle,
+} from "lucide-react";
 import FilePreview from "@/components/FilePreview";
-import type { DocumentOut, ResultOut } from "@/lib/types";
+import { ProgressBar, StatusBadge } from "@/components/StatusBadge";
+import { api } from "@/lib/api";
+import { bytes, fileKind, money, shortDate } from "@/lib/format";
+import { IN_FLIGHT, type DocumentOut, type ResultOut } from "@/lib/types";
 
-// Helper to extract page-by-page text from raw OCR text
+const REVIEWER = "reviewer@docuintel.com";
+type Notice = { type: "success" | "error" | "info"; text: string };
+type ViewMode = "preview" | "page_text" | "all_text";
+
+// Splits the stored OCR text into pages ("--- Page N ---" markers)
 function parsePagesFromText(rawText: string): Record<number, string> {
   const pages: Record<number, string> = {};
   if (!rawText) return pages;
-
   const parts = rawText.split(/--- Page (\d+) ---/);
   if (parts.length > 1) {
-    for (let i = 1; i < parts.length; i += 2) {
-      const pageNum = parseInt(parts[i], 10);
-      const content = parts[i + 1]?.trim() || "";
-      pages[pageNum] = content;
-    }
+    for (let i = 1; i < parts.length; i += 2) pages[parseInt(parts[i], 10)] = parts[i + 1]?.trim() || "";
   } else {
     pages[1] = rawText.trim();
   }
   return pages;
 }
 
-export default function DocumentDetailsPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const resolvedParams = use(params);
-  const docId = resolvedParams.id;
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+export default function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id: docId } = use(params);
   const router = useRouter();
 
   const [doc, setDoc] = useState<DocumentOut | null>(null);
   const [results, setResults] = useState<ResultOut[]>([]);
-  const [invoiceIdx, setInvoiceIdx] = useState(0); // which invoice of a multi-invoice document is shown
+  const [invoiceIdx, setInvoiceIdx] = useState(0);
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Dynamic Page Navigation State
   const [currentPage, setCurrentPage] = useState(1);
-  const [viewMode, setViewMode] = useState<"preview" | "page_text" | "all_text">("preview");
-  const [zoomLevel, setZoomLevel] = useState(100);
+  const [viewMode, setViewMode] = useState<ViewMode>("preview");
+  const [zoom, setZoom] = useState(100);
 
-  // Action status
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
-  const [manualReconcileOpen, setManualReconcileOpen] = useState(false);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [manualOpen, setManualOpen] = useState(false);
   const [customTotal, setCustomTotal] = useState("");
-
-  // Manual Corrections Mode State
   const [editMode, setEditMode] = useState(false);
-  const [editFields, setEditFields] = useState({
-    supplier_name: "",
-    customer_name: "",
-    invoice_date: "",
-    invoice_number: "",
-    subtotal: "",
-    tax: "",
-    total: "",
-    currency: "USD",
-  });
+  const [edit, setEdit] = useState({ supplier_name: "", customer_name: "", invoice_date: "", invoice_number: "", subtotal: "", tax: "", total: "", currency: "USD" });
 
-  const loadData = async () => {
+  const loadData = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const [d, r, h] = await Promise.all([
         api.getDocument(docId),
         api.getResults(docId).catch(() => []),
@@ -77,1743 +65,457 @@ export default function DocumentDetailsPage({
       setDoc(d);
       setResults(r || []);
       setHistory(h || []);
+      setError(null);
     } catch (err: any) {
-      setError(err.message || "Failed to load document.");
+      setError(err.message || "Could not load this document.");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    if (docId) void loadData();
   }, [docId]);
+
+  useEffect(() => { void loadData(); }, [loadData]);
+
+  // Follow a document that is still being processed (first upload or a re-run)
+  const inFlight = !!doc && IN_FLIGHT.includes(doc.status);
+  useEffect(() => {
+    if (!inFlight) return;
+    const t = setInterval(() => void loadData(true), 2500);
+    return () => clearInterval(t);
+  }, [inFlight, loadData]);
 
   if (loading) {
     return (
-      <div style={{ maxWidth: 1280, margin: "60px auto", textAlign: "center", color: "#64748b" }}>
-        <div style={{ fontSize: 32, marginBottom: 12 }}>⚡</div>
-        <div style={{ fontSize: 16, fontWeight: 600 }}>Loading document details...</div>
+      <div className="stack" aria-busy="true">
+        <div className="skeleton" style={{ height: 34, width: 320 }} />
+        <div className="skeleton" style={{ height: 80 }} />
+        <div className="workspace"><div className="skeleton" style={{ height: 560 }} /><div className="skeleton" style={{ height: 560 }} /></div>
       </div>
     );
   }
-
   if (error || !doc) {
     return (
-      <div style={{ maxWidth: 800, margin: "60px auto", padding: 24, background: "#ffffff", borderRadius: 10, border: "1px solid #e2e8f0", textAlign: "center" }}>
-        <div style={{ fontSize: 36, color: "#dc2626", marginBottom: 12 }}>⚠️</div>
-        <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 8px 0" }}>Document Not Found</h2>
-        <p style={{ color: "#64748b", fontSize: 14 }}>{error || "Unable to locate document record."}</p>
-        <Link href="/" className="btn btn-primary" style={{ display: "inline-block", marginTop: 16 }}>
-          ← Return to Documents Dashboard
-        </Link>
+      <div className="card empty" style={{ maxWidth: 520, margin: "40px auto" }}>
+        <XCircle size={36} />
+        <strong>We could not open this document</strong>
+        <p>{error || "It may have been deleted."}</p>
+        <Link href="/" className="btn btn-primary" style={{ marginTop: 16 }}><ArrowLeft size={15} /> Back to documents</Link>
       </div>
     );
   }
 
-  const currentResult: any = results[Math.min(invoiceIdx, Math.max(results.length - 1, 0))] || {};
-  const data = currentResult.data || {};
-  const rawText: string = data.raw_text || currentResult.raw_text || "";
+  // ------------------------------------------------------------------ derived values
+  const current = results[Math.min(invoiceIdx, Math.max(results.length - 1, 0))] as ResultOut | undefined;
+  const data: any = current?.data || {};
+  const rawText: string = data.raw_text || (current as any)?.raw_text || "";
   const pageTexts = parsePagesFromText(rawText);
   const totalPages = Math.max(doc.page_count || 1, Object.keys(pageTexts).length);
 
-  // 100% DYNAMIC EXTRACTED VALUES (NO STATIC / FAKE FALLBACKS!)
-  const vendorName = data.supplier_name || doc.summary?.supplier_name || null;
-  const customerName = data.customer_name || doc.summary?.customer_name || null;
-  const docDate = data.invoice_date || doc.summary?.invoice_date || null;
-  const invoiceNumber = data.invoice_number || doc.summary?.invoice_number || null;
-  const subtotalVal: number | null = data.subtotal != null ? Number(data.subtotal) : null;
-  const taxVal: number | null = data.tax != null ? Number(data.tax) : null;
-  const totalVal: number | null = data.total != null ? Number(data.total) : (doc.summary?.total != null ? Number(doc.summary.total) : null);
+  const supplier: string | null = data.supplier_name || doc.summary?.supplier_name || null;
+  const customer: string | null = data.customer_name || doc.summary?.customer_name || null;
+  const invoiceDate: string | null = data.invoice_date || doc.summary?.invoice_date || null;
+  const invoiceNo: string | null = data.invoice_number || doc.summary?.invoice_number || null;
+  const subtotal: number | null = data.subtotal != null ? Number(data.subtotal) : null;
+  const tax: number | null = data.tax != null ? Number(data.tax) : null;
+  const total: number | null = data.total != null ? Number(data.total) : doc.summary?.total != null ? Number(doc.summary.total) : null;
   const currency: string = data.currency || doc.summary?.currency || "USD";
   const lineItems: any[] = data.line_items || [];
-  const documentType: string = data.document_type || "General Document";
+  const documentType: string = data.document_type || "document";
+  const confidence = current?.overall_confidence;
 
-  // Check Format Rejection
   const isRejected = doc.status === "rejected" || data.is_supported_format === false;
-  const rejectionReason = doc.error || data.rejection_reason || (isRejected ? `Document rejected: not a valid commercial billing document (Identified as ${documentType}).` : null);
+  const rejectionReason = doc.error || data.rejection_reason || (isRejected ? `This does not look like an invoice, waybill or receipt (read as: ${documentType}).` : null);
+  const issues: any[] = data.issues || current?.issues || [];
+  const errorIssues = issues.filter((i) => i.severity === "error");
+  const needsReview = (doc.status === "needs_review" || errorIssues.length > 0) && doc.status !== "completed";
 
-  // Issues & Validation State
-  const issues: any[] = data.issues || [];
-  const errorIssues = issues.filter((i: any) => i.severity === "error");
-  const isNeedsReview = (doc.status === "needs_review" || errorIssues.length > 0) && doc.status !== "completed";
-
-  // Check Arithmetic Variance (Only if valid numbers exist)
-  let calculatedSum: number | null = null;
-  let varianceDiff: number | null = null;
-  let hasDiscrepancy = false;
-
-  if (subtotalVal !== null && taxVal !== null && totalVal !== null) {
-    calculatedSum = Math.round((subtotalVal + taxVal) * 100) / 100;
-    varianceDiff = Math.round((totalVal - calculatedSum) * 100) / 100;
-    hasDiscrepancy = Math.abs(varianceDiff) > 0.05 && doc.status !== "completed";
-  } else if (lineItems.length > 0 && totalVal !== null && subtotalVal === null) {
-    const sumLines = lineItems.reduce((acc: number, item: any) => acc + (Number(item.amount) || 0), 0);
-    if (sumLines > 0) {
-      calculatedSum = Math.round((sumLines + (taxVal != null ? taxVal : 0)) * 100) / 100;
-      varianceDiff = Math.round((totalVal - calculatedSum) * 100) / 100;
-      hasDiscrepancy = Math.abs(varianceDiff) > 0.05 && doc.status !== "completed";
-    }
+  // Arithmetic: subtotal + tax should equal the stated total (or, without a subtotal, the sum of the lines)
+  let expected: number | null = null;
+  let basis = "Subtotal + tax";
+  if (subtotal !== null && total !== null) expected = round2(subtotal + (tax ?? 0));
+  else if (subtotal === null && total !== null && lineItems.length) {
+    const lines = lineItems.reduce((a, i) => a + (Number(i.amount) || 0), 0);
+    if (lines > 0) { expected = round2(lines + (tax ?? 0)); basis = "Sum of line items + tax"; }
   }
+  const variance = expected !== null && total !== null ? round2(total - expected) : null;
+  const mathOff = variance !== null && Math.abs(variance) > 0.05;
+  const needsAction = mathOff && doc.status !== "completed";
+  const lineSum = lineItems.length ? round2(lineItems.reduce((a, i) => a + (Number(i.amount) || 0), 0)) : null;
+  const linesOff = lineSum !== null && subtotal !== null && Math.abs(lineSum - subtotal) > 0.05;
 
-  // 1. Approve & Vectorize Action
-  const handleApprove = async () => {
+  const ok = (m: string) => setNotice({ type: "success", text: m });
+  const fail = (m: string) => setNotice({ type: "error", text: m });
+
+  const run = async (fn: () => Promise<void>, errPrefix: string) => {
     setBusy(true);
-    try {
-      await api.approve(doc.id, "auditor@docuintel.com");
-      setDoc({ ...doc, status: "completed", stage: "Approved & Vectorized" });
-      setNotice({ type: "success", text: "✓ Document verified & successfully stored in vector database!" });
-      void loadData();
-    } catch (err: any) {
-      setNotice({ type: "error", text: `Approval notice: ${err.message}` });
-    } finally {
-      setBusy(false);
-    }
+    try { await fn(); } catch (err: any) { fail(`${errPrefix}: ${err.message}`); } finally { setBusy(false); }
   };
 
-  // 2. Reconcile Variance: Apply Calculated Sum
-  const handleApplySum = async () => {
-    if (calculatedSum === null) return;
-    setBusy(true);
-    try {
-      await api.reconcile(doc.id, {
-        subtotal: subtotalVal ?? undefined,
-        tax: taxVal ?? undefined,
-        total: calculatedSum,
-        action: "apply_sum",
-        reviewer: "auditor@docuintel.com",
-      });
-      setDoc({ ...doc, status: "completed", stage: "Reconciled & Vectorized" });
-      setNotice({ type: "success", text: `✓ Applied calculated sum ($${calculatedSum.toFixed(2)}). Discrepancy resolved and stored in vector database!` });
-      void loadData();
-    } catch (err: any) {
-      setNotice({ type: "error", text: `Reconciliation error: ${err.message}` });
-    } finally {
-      setBusy(false);
-    }
+  // ------------------------------------------------------------------ actions
+  const approve = () => run(async () => {
+    await api.approve(doc.id, REVIEWER);
+    ok("Approved. The document is verified and now searchable.");
+    await loadData(true);
+  }, "Could not approve");
+
+  const applySum = () => expected !== null && run(async () => {
+    await api.reconcile(doc.id, { subtotal: subtotal ?? undefined, tax: tax ?? undefined, total: expected!, action: "apply_sum", reviewer: REVIEWER });
+    ok(`Total corrected to ${money(expected, currency)} and the document is verified.`);
+    await loadData(true);
+  }, "Could not apply the calculated total");
+
+  const keepStated = () => total !== null && run(async () => {
+    await api.reconcile(doc.id, { subtotal: subtotal ?? undefined, tax: tax ?? undefined, total, action: "override", reviewer: REVIEWER });
+    ok(`Stated total of ${money(total, currency)} accepted and the document is verified.`);
+    await loadData(true);
+  }, "Could not accept the stated total");
+
+  const saveCustomTotal = () => customTotal && run(async () => {
+    await api.reconcile(doc.id, { total: parseFloat(customTotal), action: "manual", reviewer: REVIEWER } as any);
+    ok(`Total set to ${money(parseFloat(customTotal), currency)} and the document is verified.`);
+    setManualOpen(false);
+    setCustomTotal("");
+    await loadData(true);
+  }, "Could not save the total");
+
+  const reject = async () => {
+    if (!confirm("Reject this document? It will be excluded from search.")) return;
+    await run(async () => {
+      await api.reject(doc.id, "Not a supported invoice, waybill or receipt.", REVIEWER);
+      fail("Rejected. The document is excluded from search.");
+      await loadData(true);
+    }, "Could not reject");
   };
 
-  // 3. Reconcile Variance: Override with Extracted Total
-  const handleOverride = async () => {
-    if (totalVal === null) return;
-    setBusy(true);
-    try {
-      await api.reconcile(doc.id, {
-        subtotal: subtotalVal ?? undefined,
-        tax: taxVal ?? undefined,
-        total: totalVal,
-        action: "override",
-        reviewer: "auditor@docuintel.com",
-      });
-      setDoc({ ...doc, status: "completed", stage: "Reconciled & Vectorized" });
-      setNotice({ type: "success", text: `✓ Stated total ($${totalVal.toFixed(2)}) accepted. Document stored in vector database!` });
-      void loadData();
-    } catch (err: any) {
-      setNotice({ type: "error", text: `Override error: ${err.message}` });
-    } finally {
-      setBusy(false);
-    }
+  const remove = async () => {
+    if (!confirm(`Delete ${doc.filename}? This cannot be undone.`)) return;
+    try { await api.deleteDocument(doc.id); router.push("/"); } catch (err: any) { fail(`Could not delete: ${err.message}`); }
   };
 
-  // 4. Reject Document
-  const handleReject = async () => {
-    if (confirm("Reject this document due to format mismatch or invalid schema?")) {
-      setBusy(true);
-      try {
-        await api.reject(doc.id, "Format Mismatch: Document structure does not conform to standardized invoice/waybill format.", "auditor@docuintel.com");
-        setDoc({ ...doc, status: "rejected", stage: "Format Rejected" });
-        setNotice({ type: "error", text: "✕ Document marked as Rejected. Excluded from vector database." });
-        void loadData();
-      } catch (err: any) {
-        setNotice({ type: "error", text: `Rejection notice: ${err.message}` });
-      } finally {
-        setBusy(false);
-      }
-    }
-  };
+  const rerun = () => run(async () => {
+    await api.rerunOcr(doc.id);
+    setNotice({ type: "info", text: "Reading the document again. This page updates when it finishes." });
+    await loadData(true);
+  }, "Could not restart processing");
 
-  // 5. Delete Document
-  const handleDelete = async () => {
-    if (confirm(`Permanently delete ${doc.filename}?`)) {
-      try {
-        await api.deleteDocument(doc.id);
-        router.push("/");
-      } catch (err: any) {
-        alert(`Delete failed: ${err.message}`);
-      }
-    }
-  };
-
-  // 6. Manual Value Corrections
-  const startEditing = () => {
-    setEditFields({
-      supplier_name: vendorName || "",
-      customer_name: customerName || "",
-      invoice_date: docDate || "",
-      invoice_number: invoiceNumber || "",
-      subtotal: subtotalVal !== null ? String(subtotalVal) : "",
-      tax: taxVal !== null ? String(taxVal) : "",
-      total: totalVal !== null ? String(totalVal) : "",
-      currency: currency || "USD",
+  const startEdit = () => {
+    setEdit({
+      supplier_name: supplier || "", customer_name: customer || "", invoice_date: invoiceDate || "", invoice_number: invoiceNo || "",
+      subtotal: subtotal !== null ? String(subtotal) : "", tax: tax !== null ? String(tax) : "", total: total !== null ? String(total) : "", currency,
     });
     setEditMode(true);
   };
 
-  const handleSaveCorrections = async () => {
-    setBusy(true);
-    try {
-      const corrections: Record<string, any> = {
-        supplier_name: editFields.supplier_name.trim() || undefined,
-        customer_name: editFields.customer_name.trim() || undefined,
-        invoice_date: editFields.invoice_date.trim() || undefined,
-        invoice_number: editFields.invoice_number.trim() || undefined,
-        currency: editFields.currency.trim() || "USD",
-      };
-      if (editFields.subtotal !== "") corrections.subtotal = parseFloat(editFields.subtotal);
-      if (editFields.tax !== "") corrections.tax = parseFloat(editFields.tax);
-      if (editFields.total !== "") corrections.total = parseFloat(editFields.total);
+  const saveEdit = () => run(async () => {
+    const c: Record<string, any> = {
+      supplier_name: edit.supplier_name.trim() || undefined, customer_name: edit.customer_name.trim() || undefined,
+      invoice_date: edit.invoice_date.trim() || undefined, invoice_number: edit.invoice_number.trim() || undefined,
+      currency: edit.currency.trim().toUpperCase() || "USD",
+    };
+    if (edit.subtotal !== "") c.subtotal = parseFloat(edit.subtotal);
+    if (edit.tax !== "") c.tax = parseFloat(edit.tax);
+    if (edit.total !== "") c.total = parseFloat(edit.total);
+    await api.correctDocument(doc.id, c, undefined, current?.id);
+    ok("Corrections saved.");
+    setEditMode(false);
+    await loadData(true);
+  }, "Could not save corrections");
 
-      await api.correctDocument(doc.id, corrections, undefined, currentResult.id);
-      setNotice({ type: "success", text: "✓ Manually corrected values saved and synchronized into database & vector store!" });
-      setEditMode(false);
-      void loadData();
-    } catch (err: any) {
-      setNotice({ type: "error", text: `Correction failed: ${err.message}` });
-    } finally {
-      setBusy(false);
-    }
-  };
+  // ------------------------------------------------------------------ view helpers
+  const kind = fileKind(doc.file_type, doc.filename);
+  const verdict = isRejected
+    ? { tone: "bad", icon: <ShieldX size={18} />, title: "Rejected: not a billing document", text: rejectionReason }
+    : doc.status === "failed"
+    ? { tone: "bad", icon: <XCircle size={18} />, title: "Processing failed", text: doc.error || "The file could not be read. Try processing it again." }
+    : inFlight
+    ? { tone: "work", icon: <Loader2 size={18} className="spin" />, title: doc.status === "queued" ? "Waiting in the queue" : "Reading this document", text: "Results appear here as soon as extraction finishes." }
+    : doc.status === "completed"
+    ? { tone: "ok", icon: <CheckCircle2 size={18} />, title: "Verified and searchable", text: "The extracted values were checked and the document is indexed for search." }
+    : { tone: "review", icon: <AlertTriangle size={18} />, title: "Needs your review", text: errorIssues.length ? "Check the flagged values below against the original page, then approve or correct them." : "Confirm the values against the original page, then approve." };
 
-  // 7. Re-run OCR
-  const handleRerunOcr = async () => {
-    setBusy(true);
-    try {
-      await api.rerunOcr(doc.id);
-      setNotice({ type: "info", text: "Re-running OCR and extraction pipeline in background..." });
-      setTimeout(() => void loadData(), 2500);
-    } catch (err: any) {
-      setNotice({ type: "error", text: `Re-run notice: ${err.message}` });
-    } finally {
-      setBusy(false);
-    }
-  };
+  const fact = (label: string, value: string | null, mono = false, wide = false) => (
+    <div className={`fact${wide ? " wide" : ""}`}>
+      <dt>{label}</dt>
+      <dd className={`${value ? "" : "missing"}${mono ? " mono" : ""}`}>{value || "Not found"}</dd>
+    </div>
+  );
+  const input = (key: keyof typeof edit, label: string, props: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
+    <label className="field">
+      <span>{label}</span>
+      <input className={`input${props.type === "number" ? " num" : ""}`} value={edit[key]} onChange={(e) => setEdit({ ...edit, [key]: e.target.value })} {...props} />
+    </label>
+  );
+  const confTone = confidence == null ? "" : confidence >= 0.8 ? "" : confidence >= 0.6 ? "mid" : "low";
+  const range = (r: ResultOut): number[] | null => (r.data as any)?.page_range || null;
 
   return (
-    <div style={{ maxWidth: 1380, margin: "0 auto", padding: "16px 20px 80px 20px" }}>
-      {/* ==================================================================== */}
-      {/* 1. TOP BREADCRUMB & METADATA BAR                                     */}
-      {/* ==================================================================== */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: 12,
-          marginBottom: 12,
-          paddingBottom: 12,
-          borderBottom: "1px solid #e2e8f0",
-        }}
-      >
-        {/* Left: Breadcrumbs + Metadata Badges */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <Link
-            href="/"
-            style={{
-              fontSize: 13,
-              color: "#64748b",
-              textDecoration: "none",
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
-              fontWeight: 500,
-            }}
-          >
-            <span>📁</span> Documents
-          </Link>
-          <span style={{ color: "#94a3b8" }}>/</span>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 15 }}>📄</span>
-            <span style={{ fontSize: 14.5, fontWeight: 700, color: "#0f172a" }}>
-              {doc.filename}
-            </span>
+    <div>
+      {/* ---------------------------------------------------------------- header */}
+      <Link href="/" className="back"><ArrowLeft size={15} /> All documents</Link>
+      <div className="page-head" style={{ marginBottom: 16 }}>
+        <div style={{ minWidth: 0 }}>
+          <h1 className="page-title truncate" style={{ fontSize: 26 }} title={doc.filename}>{doc.filename}</h1>
+          <div className="row" style={{ marginTop: 8, gap: 8 }}>
+            <StatusBadge status={doc.status} />
+            <span className={`tag ${({ pdf: "pdf", image: "img", sheet: "xls", other: "" } as const)[kind.kind]}`}>{kind.label}</span>
+            <span className="muted small mono">{bytes(doc.size_bytes)} · {totalPages} page{totalPages === 1 ? "" : "s"} · uploaded {shortDate(doc.created_at)}</span>
           </div>
-
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              color: "#475569",
-              background: "#f1f5f9",
-              border: "1px solid #e2e8f0",
-              padding: "2px 7px",
-              borderRadius: 4,
-            }}
-          >
-            {bytes(doc.size_bytes)}
-          </span>
-
-          {docDate && (
-            <span
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                color: "#475569",
-                background: "#f1f5f9",
-                border: "1px solid #e2e8f0",
-                padding: "2px 7px",
-                borderRadius: 4,
-              }}
-            >
-              {docDate}
-            </span>
-          )}
-
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              color: isRejected ? "#991b1b" : "#6b21a8",
-              background: isRejected ? "#fee2e2" : "#ede9fe",
-              border: isRejected ? "1px solid #fca5a5" : "1px solid #ddd6fe",
-              padding: "2px 8px",
-              borderRadius: 4,
-            }}
-          >
-            {documentType}
-          </span>
         </div>
-
-        {/* Right: Top Action Controls */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button
-            type="button"
-            onClick={() => {
-              const el = document.getElementById("audit-lineage");
-              if (el) el.scrollIntoView({ behavior: "smooth" });
-            }}
-            className="btn btn-sm"
-            style={{ background: "#f8fafc", color: "#334155", border: "1px solid #cbd5e1", fontSize: 12 }}
-          >
-            ⏱ Audit Logs
-          </button>
-
-          <button
-            type="button"
-            onClick={handleRerunOcr}
-            disabled={busy}
-            className="btn btn-sm"
-            style={{ background: "#f8fafc", color: "#334155", border: "1px solid #cbd5e1", fontSize: 12 }}
-          >
-            🔄 Re-run OCR
-          </button>
-
-          {!isRejected && (
-            <button
-              type="button"
-              onClick={handleReject}
-              disabled={busy}
-              className="btn btn-sm"
-              style={{ background: "#fff1f2", color: "#be123c", border: "1px solid #fecdd3", fontSize: 12 }}
-            >
-              ✕ Reject
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={handleDelete}
-            className="btn btn-sm"
-            style={{ background: "#fee2e2", color: "#b91c1c", border: "1px solid #fca5a5", fontSize: 12 }}
-          >
-            🗑 Delete
-          </button>
-
-          {!isRejected && (
-            <button
-              type="button"
-              onClick={handleApprove}
-              disabled={busy}
-              style={{
-                background: "#2563eb",
-                color: "#ffffff",
-                border: "none",
-                borderRadius: 6,
-                padding: "6px 16px",
-                fontSize: 12.5,
-                fontWeight: 700,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                boxShadow: "0 1px 2px rgba(37,99,235,0.2)",
-              }}
-            >
-              <span>✔</span> Approve &amp; Vectorize
-            </button>
+        <div className="row" style={{ gap: 8 }}>
+          <button type="button" className="btn" onClick={rerun} disabled={busy || inFlight}><RotateCw size={15} /> Read again</button>
+          {!isRejected && doc.status !== "completed" && <button type="button" className="btn btn-danger" onClick={reject} disabled={busy}><X size={15} /> Reject</button>}
+          <button type="button" className="btn btn-danger" onClick={remove} disabled={busy}><Trash2 size={15} /> Delete</button>
+          {!isRejected && doc.status !== "completed" && doc.status !== "failed" && !inFlight && (
+            <button type="button" className="btn btn-verify" onClick={approve} disabled={busy}><Check size={15} /> Approve</button>
           )}
         </div>
       </div>
 
-      {/* ==================================================================== */}
-      {/* 2. SECONDARY STATUS & VALIDATION BANNER                              */}
-      {/* ==================================================================== */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: 12,
-          marginBottom: 16,
-        }}
-      >
-        {/* Status Pill */}
-        <div>
-          {isRejected ? (
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                background: "#fee2e2",
-                border: "1px solid #fca5a5",
-                color: "#991b1b",
-                fontSize: 12,
-                fontWeight: 700,
-                padding: "4px 12px",
-                borderRadius: 14,
-              }}
-            >
-              <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#b91c1c" }} />
-              ✕ Intake Rejected: {documentType}
-            </div>
-          ) : doc.status === "failed" ? (
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                background: "#fee2e2",
-                border: "1px solid #fca5a5",
-                color: "#991b1b",
-                fontSize: 12,
-                fontWeight: 700,
-                padding: "4px 12px",
-                borderRadius: 14,
-              }}
-            >
-              <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#dc2626" }} />
-              ✕ Processing Failed: {doc.stage || "Parser Error"}
-            </div>
-          ) : doc.status === "needs_review" ? (
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                background: "#fef2f2",
-                border: "1px solid #fecaca",
-                color: "#b91c1c",
-                fontSize: 12,
-                fontWeight: 600,
-                padding: "4px 12px",
-                borderRadius: 14,
-              }}
-            >
-              <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#dc2626" }} />
-              ⚠ Needs Review ({doc.stage || "Variance Detected"})
-            </div>
-          ) : (
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                background: "#ecfdf5",
-                border: "1px solid #a7f3d0",
-                color: "#065f46",
-                fontSize: 12,
-                fontWeight: 600,
-                padding: "4px 12px",
-                borderRadius: 14,
-              }}
-            >
-              <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#10b981" }} />
-              ✓ Verified &amp; Stored in Vector Database
-            </div>
-          )}
+      <div className={`verdict ${verdict.tone}`} role="status">
+        <span className="v-icon">{verdict.icon}</span>
+        <div style={{ flex: 1 }}>
+          <h2>{verdict.title}</h2>
+          {verdict.text && <p>{verdict.text}</p>}
+          {inFlight && <div style={{ marginTop: 10, maxWidth: 360 }}><ProgressBar doc={doc} /></div>}
         </div>
-
-        {/* Engine & Extraction Confidence Pill */}
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            background: isRejected || doc.status === "failed" ? "#f1f5f9" : "#ccfbf1",
-            border: isRejected || doc.status === "failed" ? "1px solid #cbd5e1" : "1px solid #99f6e4",
-            color: isRejected || doc.status === "failed" ? "#475569" : "#0f766e",
-            fontSize: 12,
-            fontWeight: 600,
-            padding: "3px 12px",
-            borderRadius: 6,
-          }}
-        >
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: isRejected || doc.status === "failed" ? "#64748b" : "#0d9488" }} />
-          <span>
-            {isRejected
-              ? `Dynamic Classification • ${documentType}`
-              : doc.status === "failed"
-              ? `Parser Failure • ${doc.stage || "Error"}`
-              : `LangChain v2.4 Vision-LLM • ${((currentResult.overall_confidence || 0.95) * 100).toFixed(1)}% Confidence`}
-          </span>
-        </div>
+        {confidence != null && !isRejected && !inFlight && (
+          <div className="confidence" title="Estimated from how many key fields were found and how well the page could be read. It is a guide, not a probability.">
+            <div>
+              <div className="eyebrow">Confidence</div>
+              <div className="mono" style={{ fontWeight: 600, fontSize: 18 }}>{Math.round(confidence * 100)}%</div>
+            </div>
+            <span className={`bar ${confTone}`}><i style={{ width: `${Math.round(confidence * 100)}%` }} /></span>
+          </div>
+        )}
       </div>
 
-      {/* Notice Toast */}
       {results.length > 1 && (
-        <div role="tablist" aria-label="Invoices in this document" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", margin: "0 0 12px 0" }}>
-          <span style={{ fontSize: 13, color: "#475569", fontWeight: 600 }}>{results.length} invoices in this document:</span>
-          {results.map((r: any, i: number) => (
-            <button
-              key={r.id ?? i}
-              role="tab"
-              aria-selected={i === invoiceIdx}
-              onClick={() => { setInvoiceIdx(i); setEditMode(false); }}
-              style={{
-                padding: "4px 10px", borderRadius: 6, fontSize: 12, cursor: "pointer",
-                border: `1px solid ${i === invoiceIdx ? "#2563eb" : "#cbd5e1"}`,
-                background: i === invoiceIdx ? "#eff6ff" : "#ffffff",
-                color: r.needs_review && !r.reviewed ? "#b45309" : "#0f172a",
-              }}
-            >
-              {r.invoice_number || `Invoice ${i + 1}`}
-              {r.data?.page_range ? ` · p.${r.data.page_range[0]}–${r.data.page_range[1]}` : ""}
-              {r.needs_review && !r.reviewed ? " ⚠" : ""}
-            </button>
-          ))}
+        <div className="invoice-tabs" role="tablist" aria-label="Invoices in this document">
+          <span className="muted small" style={{ marginRight: 4 }}>{results.length} invoices in this file</span>
+          {results.map((r, i) => {
+            const pr = range(r);
+            return (
+              <button key={r.id ?? i} type="button" role="tab" aria-selected={i === invoiceIdx}
+                onClick={() => { setInvoiceIdx(i); setEditMode(false); if (pr) setCurrentPage(pr[0]); }}>
+                {r.data?.invoice_number || `Invoice ${i + 1}`}
+                {pr ? ` · p.${pr[0]}${pr[1] !== pr[0] ? `–${pr[1]}` : ""}` : ""}
+                {r.needs_review && !r.reviewed && <AlertTriangle size={13} aria-label="needs review" />}
+              </button>
+            );
+          })}
         </div>
       )}
 
       {notice && (
-        <div
-          style={{
-            padding: "10px 16px",
-            background: notice.type === "success" ? "#f0fdf4" : notice.type === "error" ? "#fef2f2" : "#eff6ff",
-            border: `1px solid ${notice.type === "success" ? "#bbf7d0" : notice.type === "error" ? "#fecaca" : "#bfdbfe"}`,
-            color: notice.type === "success" ? "#166534" : notice.type === "error" ? "#991b1b" : "#1e40af",
-            borderRadius: 8,
-            marginBottom: 16,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            fontSize: 13,
-          }}
-        >
-          <span>{notice.text}</span>
-          <button
-            onClick={() => setNotice(null)}
-            style={{ background: "none", border: "none", cursor: "pointer", fontWeight: 700, color: "inherit" }}
-          >
-            ✕
-          </button>
+        <div className={`alert alert-${notice.type === "error" ? "error" : notice.type === "info" ? "info" : "ok"}`} role="status">
+          {notice.type === "error" ? <AlertTriangle size={16} /> : notice.type === "info" ? <Info size={16} /> : <CheckCircle2 size={16} />}
+          <div>{notice.text}</div>
+          <button type="button" className="btn-icon" aria-label="Dismiss" onClick={() => setNotice(null)}><X size={15} /></button>
         </div>
       )}
 
-      {/* ==================================================================== */}
-      {/* 3. MAIN 2-COLUMN GRID (LEFT: MULTI-PAGE VIEWER; RIGHT: ENTITIES & RULES) */}
-      {/* ==================================================================== */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(480px, 1.25fr) minmax(420px, 1fr)",
-          gap: 22,
-          alignItems: "start",
-        }}
-      >
-        {/* ------------------------------------------------------------------ */}
-        {/* LEFT COLUMN: MULTI-PAGE DOCUMENT CANVAS (100% REAL DOCUMENT)       */}
-        {/* ------------------------------------------------------------------ */}
-        <div>
-          {/* Top Multi-Page Controls Bar */}
-          <div
-            style={{
-              background: "#ffffff",
-              border: "1px solid #e2e8f0",
-              borderRadius: "8px 8px 0 0",
-              padding: "10px 14px",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              flexWrap: "wrap",
-              gap: 10,
-              fontSize: 12,
-              color: "#475569",
-            }}
-          >
-            {/* Dynamic Multi-Page Pagination */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>Document Viewer:</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage <= 1}
-                  style={{
-                    background: "#f1f5f9",
-                    border: "1px solid #cbd5e1",
-                    borderRadius: 4,
-                    padding: "3px 8px",
-                    cursor: currentPage <= 1 ? "not-allowed" : "pointer",
-                    fontWeight: 700,
-                  }}
-                >
-                  &lt;
-                </button>
-                <span style={{ fontWeight: 700, color: "#0f172a", padding: "0 4px" }}>
-                  Page {currentPage} of {totalPages}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={currentPage >= totalPages}
-                  style={{
-                    background: "#f1f5f9",
-                    border: "1px solid #cbd5e1",
-                    borderRadius: 4,
-                    padding: "3px 8px",
-                    cursor: currentPage >= totalPages ? "not-allowed" : "pointer",
-                    fontWeight: 700,
-                  }}
-                >
-                  &gt;
-                </button>
-              </div>
+      <div className="workspace">
+        {/* ---------------------------------------------------------------- source page */}
+        <section className="card viewer" aria-label="Original document">
+          <div className="viewer-bar">
+            <div className="stepper">
+              <button type="button" className="btn-icon" aria-label="Previous page" disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}><ChevronLeft size={17} /></button>
+              <span className="pos">Page {currentPage} of {totalPages}</span>
+              <button type="button" className="btn-icon" aria-label="Next page" disabled={currentPage >= totalPages} onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}><ChevronRight size={17} /></button>
             </div>
-
-            {/* Sync Badge */}
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span
-                style={{
-                  background: isRejected ? "#991b1b" : doc.status === "completed" ? "#059669" : "#d97706",
-                  color: "#ffffff",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  padding: "2px 7px",
-                  borderRadius: 3,
-                  letterSpacing: "0.5px",
-                }}
-              >
-                {isRejected ? "VECTOR_EXCLUDED" : doc.status === "completed" ? "VECTOR_SYNC_ACTIVE" : "VECTOR_SYNC_PENDING"}
-              </span>
-
-              {/* Zoom Controls */}
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <button
-                  type="button"
-                  onClick={() => setZoomLevel((z) => Math.max(70, z - 10))}
-                  style={{ background: "none", border: "1px solid #cbd5e1", borderRadius: 4, padding: "2px 6px", cursor: "pointer" }}
-                >
-                  —
-                </button>
-                <span style={{ fontWeight: 600 }}>{zoomLevel}%</span>
-                <button
-                  type="button"
-                  onClick={() => setZoomLevel((z) => Math.min(140, z + 10))}
-                  style={{ background: "none", border: "1px solid #cbd5e1", borderRadius: 4, padding: "2px 6px", cursor: "pointer" }}
-                >
-                  +
-                </button>
+            {viewMode === "preview" && (
+              <div className="stepper">
+                <button type="button" className="btn-icon" aria-label="Zoom out" disabled={zoom <= 50} onClick={() => setZoom((z) => Math.max(50, z - 10))}><Minus size={15} /></button>
+                <span className="pos mono" style={{ minWidth: 48 }}>{zoom}%</span>
+                <button type="button" className="btn-icon" aria-label="Zoom in" disabled={zoom >= 200} onClick={() => setZoom((z) => Math.min(200, z + 10))}><Plus size={15} /></button>
               </div>
+            )}
+            <div className="seg" role="tablist" aria-label="View">
+              <button type="button" role="tab" aria-selected={viewMode === "preview"} onClick={() => setViewMode("preview")}>Page</button>
+              <button type="button" role="tab" aria-selected={viewMode === "page_text"} onClick={() => setViewMode("page_text")}>Page text</button>
+              <button type="button" role="tab" aria-selected={viewMode === "all_text"} onClick={() => setViewMode("all_text")}>All text</button>
             </div>
           </div>
-
-          {/* Mode Tabs: Real PDF View vs Page-Specific Text vs Full OCR Dump */}
-          <div style={{ display: "flex", background: "#f8fafc", border: "1px solid #e2e8f0", borderTop: "none", padding: "0 12px" }}>
-            <button
-              onClick={() => setViewMode("preview")}
-              style={{
-                padding: "8px 12px",
-                fontSize: 12,
-                fontWeight: 600,
-                background: "none",
-                border: "none",
-                borderBottom: viewMode === "preview" ? "2px solid #2563eb" : "2px solid transparent",
-                color: viewMode === "preview" ? "#2563eb" : "#64748b",
-                cursor: "pointer",
-              }}
-            >
-              📄 Live Document Page ({currentPage})
-            </button>
-            <button
-              onClick={() => setViewMode("page_text")}
-              style={{
-                padding: "8px 12px",
-                fontSize: 12,
-                fontWeight: 600,
-                background: "none",
-                border: "none",
-                borderBottom: viewMode === "page_text" ? "2px solid #2563eb" : "2px solid transparent",
-                color: viewMode === "page_text" ? "#2563eb" : "#64748b",
-                cursor: "pointer",
-              }}
-            >
-              📝 Page {currentPage} Extracted Text
-            </button>
-            <button
-              onClick={() => setViewMode("all_text")}
-              style={{
-                padding: "8px 12px",
-                fontSize: 12,
-                fontWeight: 600,
-                background: "none",
-                border: "none",
-                borderBottom: viewMode === "all_text" ? "2px solid #2563eb" : "2px solid transparent",
-                color: viewMode === "all_text" ? "#2563eb" : "#64748b",
-                cursor: "pointer",
-              }}
-            >
-              🗂 All Pages ({totalPages}) Complete Stream
-            </button>
+          <div className="canvas">
+            {viewMode === "preview" ? (
+              <FilePreview imageUrl={api.pageImageUrl(doc.id, currentPage)} fileUrl={api.fileUrl(doc.id)} fileType={doc.file_type || ""} filename={doc.filename} page={currentPage} zoom={zoom} />
+            ) : (
+              <pre className="canvas-text">
+                {viewMode === "page_text"
+                  ? pageTexts[currentPage] || `No text was read from page ${currentPage}.`
+                  : rawText || "No text was read from this document."}
+              </pre>
+            )}
           </div>
+        </section>
 
-          {/* Rejection Alert Bar above Document */}
-          {isRejected && (
-            <div
-              style={{
-                background: "#fef2f2",
-                border: "1px solid #fecaca",
-                borderTop: "none",
-                padding: "10px 14px",
-                color: "#991b1b",
-                fontSize: 12.5,
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              <span style={{ fontSize: 16 }}>⚠️</span>
-              <div>
-                <strong>Format Validation Failed:</strong> {rejectionReason}
+        {/* ---------------------------------------------------------------- review */}
+        <div className="stack">
+          {needsReview && !isRejected && (issues.length > 0 || needsAction) && (
+            <section className="card" aria-label="Issues to resolve">
+              <div className="card-head">
+                <h2 className="card-title"><AlertTriangle size={16} style={{ color: "var(--review)" }} /> {issues.length || 1} thing{issues.length === 1 ? "" : "s"} to check</h2>
               </div>
-            </div>
-          )}
-
-          {/* Live Document Canvas */}
-          {viewMode === "preview" ? (
-            <div
-              style={{
-                height: 760,
-                border: "1px solid #e2e8f0",
-                borderTop: "none",
-                borderRadius: "0 0 8px 8px",
-                background: "#e5e7eb",
-                overflow: "auto",
-                position: "relative",
-              }}
-            >
-              <FilePreview imageUrl={api.pageImageUrl(doc.id, currentPage)} fileUrl={api.fileUrl(doc.id)} fileType={doc.file_type || ""} filename={doc.filename} page={currentPage} zoom={zoomLevel} />
-            </div>
-          ) : viewMode === "page_text" ? (
-            <div
-              style={{
-                border: "1px solid #e2e8f0",
-                borderTop: "none",
-                borderRadius: "0 0 8px 8px",
-                background: "#0f172a",
-                padding: 18,
-                maxHeight: 760,
-                overflowY: "auto",
-              }}
-            >
-              <div style={{ color: "#38bdf8", fontSize: 12, fontWeight: 700, marginBottom: 8 }}>
-                === EXTRACTED OCR / TEXT FOR PAGE {currentPage} ===
-              </div>
-              <pre
-                style={{
-                  margin: 0,
-                  color: "#e2e8f0",
-                  fontSize: 12.5,
-                  lineHeight: 1.55,
-                  whiteSpace: "pre-wrap",
-                  fontFamily: "monospace",
-                }}
-              >
-                {pageTexts[currentPage] || `No text stream identified on page ${currentPage}.`}
-              </pre>
-            </div>
-          ) : (
-            <div
-              style={{
-                border: "1px solid #e2e8f0",
-                borderTop: "none",
-                borderRadius: "0 0 8px 8px",
-                background: "#0f172a",
-                padding: 18,
-                maxHeight: 760,
-                overflowY: "auto",
-              }}
-            >
-              <pre
-                style={{
-                  margin: 0,
-                  color: "#e2e8f0",
-                  fontSize: 12,
-                  lineHeight: 1.5,
-                  whiteSpace: "pre-wrap",
-                  fontFamily: "monospace",
-                }}
-              >
-                {rawText || "No raw text available."}
-              </pre>
-            </div>
-          )}
-        </div>
-
-        {/* ------------------------------------------------------------------ */}
-        {/* RIGHT COLUMN: DYNAMIC ENTITIES & REAL VALIDATION RULES             */}
-        {/* ------------------------------------------------------------------ */}
-        <div style={{ display: "grid", gap: 16 }}>
-          {/* CARD 1: FORMAT REJECTION (When non-billing document uploaded) */}
-          {isRejected && (
-            <div
-              style={{
-                background: "#fff5f5",
-                border: "1px solid #fca5a5",
-                borderRadius: 8,
-                padding: "16px 18px",
-                boxShadow: "0 1px 3px rgba(185,28,28,0.06)",
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span
-                    style={{
-                      background: "#fee2e2",
-                      color: "#b91c1c",
-                      width: 26,
-                      height: 26,
-                      borderRadius: 6,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 14,
-                      fontWeight: 700,
-                    }}
-                  >
-                    ✕
-                  </span>
-                  <span style={{ fontSize: 13.5, fontWeight: 700, color: "#991b1b" }}>
-                    Intake Gatekeeper: Rejected ({documentType})
-                  </span>
+              <div className="card-body">
+                {issues.length > 0 && (
+                  <ul className="issues" style={{ marginTop: 0 }}>
+                    {issues.map((iss, i) => (
+                      <li key={i} style={{ background: "var(--ground)" }}>
+                        {iss.severity === "error"
+                          ? <XCircle size={15} style={{ color: "var(--reject)", flex: "none", marginTop: 3 }} />
+                          : <AlertTriangle size={15} style={{ color: "var(--review)", flex: "none", marginTop: 3 }} />}
+                        <div><div className="code">{iss.code}</div>{iss.message}</div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="actions-row">
+                  {needsAction && expected !== null && <button type="button" className="btn btn-primary" onClick={applySum} disabled={busy}>Use calculated total {money(expected, currency)}</button>}
+                  {needsAction && total !== null && <button type="button" className="btn" onClick={keepStated} disabled={busy}>Keep stated total {money(total, currency)}</button>}
+                  <button type="button" className="btn" onClick={() => setManualOpen(!manualOpen)}><Pencil size={14} /> Enter a total</button>
+                  <button type="button" className="btn btn-verify" onClick={approve} disabled={busy}><Check size={15} /> Approve as it is</button>
                 </div>
-                <span
-                  style={{
-                    background: "#fee2e2",
-                    color: "#991b1b",
-                    fontSize: 10.5,
-                    fontWeight: 800,
-                    padding: "2px 8px",
-                    borderRadius: 4,
-                  }}
-                >
-                  FORMAT REJECTED
-                </span>
-              </div>
-
-              <div style={{ fontSize: 12.5, color: "#475569", lineHeight: 1.55 }}>
-                <p style={{ margin: "0 0 8px 0" }}>
-                  <strong>Failure / Rejection Reason:</strong> {rejectionReason}
-                </p>
-                <p style={{ margin: "0 0 8px 0" }}>
-                  <strong>Detected Classification:</strong> <span style={{ color: "#0f172a", fontWeight: 700 }}>{documentType}</span>
-                </p>
-                <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "8px 10px", fontSize: 11.5, color: "#b91c1c" }}>
-                  <strong>Safety Enforcement:</strong> This document is strictly excluded from the search vector database. Only verified commercial billing documents (Invoices, Waybills, and Receipts) are vectorized.
-                </div>
-              </div>
-
-              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                <button
-                  type="button"
-                  onClick={handleRerunOcr}
-                  disabled={busy}
-                  style={{
-                    background: "#f1f5f9",
-                    color: "#334155",
-                    border: "1px solid #cbd5e1",
-                    borderRadius: 6,
-                    padding: "6px 12px",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                  }}
-                >
-                  🔄 Re-run OCR &amp; Re-classify
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  style={{
-                    background: "#fee2e2",
-                    color: "#b91c1c",
-                    border: "1px solid #fca5a5",
-                    borderRadius: 6,
-                    padding: "6px 12px",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                  }}
-                >
-                  🗑 Delete Document
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* CARD 1 (ALT): ENTERPRISE RULE VALIDATOR (Flags records requiring manual review) */}
-          {!isRejected && (hasDiscrepancy || isNeedsReview || errorIssues.length > 0) && (
-            <div
-              style={{
-                background: "#fffafb",
-                border: "1px solid #fecdd3",
-                borderRadius: 8,
-                padding: "16px 18px",
-                boxShadow: "0 1px 3px rgba(185,28,28,0.05)",
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span
-                    style={{
-                      background: "#fee2e2",
-                      color: "#dc2626",
-                      width: 26,
-                      height: 26,
-                      borderRadius: 6,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 14,
-                    }}
-                  >
-                    ⚖
-                  </span>
-                  <span style={{ fontSize: 13.5, fontWeight: 700, color: "#0f172a" }}>
-                    Manual Review Required: {doc.stage || "Validation Issues Detected"}
-                  </span>
-                </div>
-                <span
-                  style={{
-                    background: "#fee2e2",
-                    color: "#b91c1c",
-                    fontSize: 10.5,
-                    fontWeight: 800,
-                    padding: "2px 8px",
-                    borderRadius: 4,
-                  }}
-                >
-                  {errorIssues.some((i: any) => i.code === "DUPLICATE_INVOICE")
-                    ? "DUPLICATE INVOICE"
-                    : hasDiscrepancy
-                    ? "ARITHMETIC ERROR"
-                    : errorIssues.some((i: any) => i.code.startsWith("NEGATIVE_") || i.code === "ZERO_TOTAL_WITH_ITEMS")
-                    ? "INCORRECT NUMERIC VALUE"
-                    : "MISSING FIELDS"}
-                </span>
-              </div>
-
-              {/* List of Detailed Issues */}
-              <div style={{ marginBottom: 12 }}>
-                {issues.map((iss: any, idx: number) => (
-                  <div
-                    key={idx}
-                    style={{
-                      background: iss.severity === "error" ? "#fef2f2" : "#f8fafc",
-                      border: `1px solid ${iss.severity === "error" ? "#fecaca" : "#e2e8f0"}`,
-                      borderRadius: 6,
-                      padding: "8px 12px",
-                      marginBottom: 6,
-                      fontSize: 12,
-                      display: "flex",
-                      alignItems: "flex-start",
-                      gap: 8,
-                    }}
-                  >
-                    <span style={{ color: iss.severity === "error" ? "#dc2626" : "#d97706", fontWeight: 700 }}>
-                      {iss.severity === "error" ? "✕" : "⚠"}
-                    </span>
-                    <div style={{ flex: 1 }}>
-                      <strong style={{ color: iss.severity === "error" ? "#991b1b" : "#92400e" }}>
-                        [{iss.code}]
-                      </strong>{" "}
-                      <span style={{ color: "#334155" }}>{iss.message}</span>
-                    </div>
+                {manualOpen && (
+                  <div className="row" style={{ marginTop: 12 }}>
+                    <label className="field" style={{ width: 180 }}>
+                      <span>Correct total ({currency})</span>
+                      <input className="input num" type="number" step="0.01" placeholder="0.00" value={customTotal} onChange={(e) => setCustomTotal(e.target.value)} />
+                    </label>
+                    <button type="button" className="btn btn-verify" style={{ alignSelf: "flex-end" }} disabled={busy || !customTotal} onClick={saveCustomTotal}>Save and approve</button>
                   </div>
-                ))}
-              </div>
-
-              {/* Discrepancy Arithmetic Summary (If math mismatch exists) */}
-              {hasDiscrepancy && calculatedSum !== null && totalVal !== null && (
-                <p style={{ margin: "0 0 12px 0", fontSize: 12.5, color: "#475569", lineHeight: 1.5 }}>
-                  Calculated Sum (<strong>${calculatedSum.toFixed(2)}</strong>) differs from extracted Total (<strong>${totalVal.toFixed(2)}</strong>) by{" "}
-                  <span style={{ color: "#dc2626", fontWeight: 700 }}>
-                    ${Math.abs(varianceDiff || 0).toFixed(2)}
-                  </span>. Suspected misread OCR digit or missing unprinted discount line.
-                </p>
-              )}
-
-              {/* Reconciliation Action Buttons */}
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {calculatedSum !== null && (
-                  <button
-                    type="button"
-                    onClick={handleApplySum}
-                    disabled={busy}
-                    style={{
-                      background: "#2563eb",
-                      color: "#ffffff",
-                      border: "none",
-                      borderRadius: 6,
-                      padding: "6px 14px",
-                      fontSize: 12,
-                      fontWeight: 700,
-                      cursor: "pointer",
-                    }}
-                  >
-                    ⊞ Apply Sum (${calculatedSum.toFixed(2)})
-                  </button>
                 )}
-
-                {totalVal !== null && (
-                  <button
-                    type="button"
-                    onClick={handleOverride}
-                    disabled={busy}
-                    style={{
-                      background: "#ffffff",
-                      color: "#334155",
-                      border: "1px solid #cbd5e1",
-                      borderRadius: 6,
-                      padding: "6px 14px",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
-                  >
-                    ⇋ Override (${totalVal.toFixed(2)})
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => setManualReconcileOpen(!manualReconcileOpen)}
-                  style={{
-                    background: "#f1f5f9",
-                    color: "#475569",
-                    border: "1px solid #e2e8f0",
-                    borderRadius: 6,
-                    padding: "6px 12px",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                  }}
-                >
-                  ✎ Manual Reconcile
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleApprove}
-                  disabled={busy}
-                  style={{
-                    background: "#059669",
-                    color: "#ffffff",
-                    border: "none",
-                    borderRadius: 6,
-                    padding: "6px 14px",
-                    fontSize: 12,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                  }}
-                >
-                  ✓ Approve &amp; Vectorize
-                </button>
               </div>
-
-              {manualReconcileOpen && (
-                <div style={{ marginTop: 12, padding: "10px 12px", background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: 6, display: "flex", gap: 8, alignItems: "center" }}>
-                  <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>Custom Total: $</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="e.g. 3340.00"
-                    value={customTotal}
-                    onChange={(e) => setCustomTotal(e.target.value)}
-                    style={{ flex: 1, padding: "4px 8px", fontSize: 13, border: "1px solid #cbd5e1", borderRadius: 4 }}
-                  />
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (!customTotal) return;
-                      setBusy(true);
-                      try {
-                        await api.reconcile(doc.id, { total: parseFloat(customTotal), action: "manual" });
-                        setNotice({ type: "success", text: `✓ Reconciled with custom total $${customTotal}!` });
-                        void loadData();
-                      } catch (err: any) {
-                        setNotice({ type: "error", text: err.message });
-                      } finally {
-                        setBusy(false);
-                      }
-                    }}
-                    style={{ background: "#059669", color: "#ffffff", border: "none", padding: "5px 12px", borderRadius: 4, fontSize: 12, fontWeight: 700, cursor: "pointer" }}
-                  >
-                    Save &amp; Vectorize
-                  </button>
-                </div>
-              )}
-            </div>
+            </section>
           )}
 
-          {/* CARD 2: REAL EXTRACTED KEY-VALUE ENTITIES (100% DYNAMIC) */}
-          <div
-            style={{
-              background: "#ffffff",
-              border: "1px solid #e2e8f0",
-              borderRadius: 8,
-              padding: "18px 20px",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ color: "#2563eb", fontWeight: 700 }}>&#123; &#125;</span>
-                <span style={{ fontSize: 13.5, fontWeight: 700, color: "#0f172a" }}>
-                  Extracted Key-Value Entities
-                </span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                {!isRejected && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (editMode) {
-                        setEditMode(false);
-                      } else {
-                        startEditing();
-                      }
-                    }}
-                    style={{
-                      background: editMode ? "#f1f5f9" : "#eff6ff",
-                      color: editMode ? "#475569" : "#2563eb",
-                      border: `1px solid ${editMode ? "#cbd5e1" : "#bfdbfe"}`,
-                      borderRadius: 4,
-                      padding: "3px 10px",
-                      fontSize: 11.5,
-                      fontWeight: 700,
-                      cursor: "pointer",
-                    }}
-                  >
-                    {editMode ? "✕ Cancel Editing" : "✎ Correct Values"}
-                  </button>
-                )}
-                <span style={{ fontSize: 11.5, color: "#64748b", fontWeight: 500 }}>
-                  {isRejected ? `${documentType} Classification` : "Commercial Schema"}
-                </span>
-              </div>
-            </div>
+          {isRejected && (
+            <section className="card card-body">
+              <p><strong>Why it was rejected:</strong> {rejectionReason}</p>
+              <p className="muted" style={{ marginTop: 8 }}>Rejected documents are kept out of search. If the document is valid, read it again; if not, delete it.</p>
+            </section>
+          )}
 
+          {/* ------------------------------------------------ key facts */}
+          <section className="card" aria-label="Extracted fields">
+            <div className="card-head">
+              <h2 className="card-title">Extracted fields</h2>
+              {!isRejected && !inFlight && (
+                editMode
+                  ? <button type="button" className="btn btn-sm" onClick={() => setEditMode(false)}>Cancel</button>
+                  : <button type="button" className="btn btn-sm" onClick={startEdit}><Pencil size={13} /> Edit values</button>
+              )}
+            </div>
             {editMode ? (
-              <form onSubmit={(e) => { e.preventDefault(); void handleSaveCorrections(); }}>
-                <div style={{ display: "grid", gap: 11, marginBottom: 16 }}>
-                  <div>
-                    <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569", marginBottom: 3 }}>
-                      VENDOR / SUPPLIER NAME
-                    </label>
-                    <input
-                      type="text"
-                      value={editFields.supplier_name}
-                      onChange={(e) => setEditFields({ ...editFields, supplier_name: e.target.value })}
-                      placeholder="e.g. Acme Corp"
-                      style={{ width: "100%", padding: "7px 10px", fontSize: 13, border: "1px solid #cbd5e1", borderRadius: 6 }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569", marginBottom: 3 }}>
-                      CUSTOMER / BILLED ENTITY
-                    </label>
-                    <input
-                      type="text"
-                      value={editFields.customer_name}
-                      onChange={(e) => setEditFields({ ...editFields, customer_name: e.target.value })}
-                      placeholder="e.g. Global Tech Inc."
-                      style={{ width: "100%", padding: "7px 10px", fontSize: 13, border: "1px solid #cbd5e1", borderRadius: 6 }}
-                    />
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569", marginBottom: 3 }}>
-                        DOCUMENT DATE
-                      </label>
-                      <input
-                        type="text"
-                        value={editFields.invoice_date}
-                        onChange={(e) => setEditFields({ ...editFields, invoice_date: e.target.value })}
-                        placeholder="YYYY-MM-DD"
-                        style={{ width: "100%", padding: "7px 10px", fontSize: 13, border: "1px solid #cbd5e1", borderRadius: 6 }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569", marginBottom: 3 }}>
-                        INVOICE NUMBER
-                      </label>
-                      <input
-                        type="text"
-                        value={editFields.invoice_number}
-                        onChange={(e) => setEditFields({ ...editFields, invoice_number: e.target.value })}
-                        placeholder="INV-12345"
-                        style={{ width: "100%", padding: "7px 10px", fontSize: 13, border: "1px solid #cbd5e1", borderRadius: 6 }}
-                      />
-                    </div>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569", marginBottom: 3 }}>
-                        SUBTOTAL
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={editFields.subtotal}
-                        onChange={(e) => setEditFields({ ...editFields, subtotal: e.target.value })}
-                        placeholder="0.00"
-                        style={{ width: "100%", padding: "7px 10px", fontSize: 13, border: "1px solid #cbd5e1", borderRadius: 6 }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569", marginBottom: 3 }}>
-                        TAX
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={editFields.tax}
-                        onChange={(e) => setEditFields({ ...editFields, tax: e.target.value })}
-                        placeholder="0.00"
-                        style={{ width: "100%", padding: "7px 10px", fontSize: 13, border: "1px solid #cbd5e1", borderRadius: 6 }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569", marginBottom: 3 }}>
-                        TOTAL
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={editFields.total}
-                        onChange={(e) => setEditFields({ ...editFields, total: e.target.value })}
-                        placeholder="0.00"
-                        style={{ width: "100%", padding: "7px 10px", fontSize: 13, border: "1px solid #cbd5e1", borderRadius: 6 }}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569", marginBottom: 3 }}>
-                      CURRENCY
-                    </label>
-                    <input
-                      type="text"
-                      value={editFields.currency}
-                      onChange={(e) => setEditFields({ ...editFields, currency: e.target.value })}
-                      placeholder="USD"
-                      style={{ width: "100%", padding: "7px 10px", fontSize: 13, border: "1px solid #cbd5e1", borderRadius: 6 }}
-                    />
-                  </div>
+              <form className="card-body" onSubmit={(e) => { e.preventDefault(); void saveEdit(); }}>
+                <div className="form-grid">
+                  {input("supplier_name", "Supplier", { placeholder: "Acme Corp" })}
+                  {input("customer_name", "Customer")}
+                  {input("invoice_number", "Invoice number")}
+                  {input("invoice_date", "Invoice date", { placeholder: "YYYY-MM-DD" })}
+                  {input("subtotal", "Subtotal", { type: "number", step: "0.01" })}
+                  {input("tax", "Tax", { type: "number", step: "0.01" })}
+                  {input("total", "Total", { type: "number", step: "0.01" })}
+                  {input("currency", "Currency", { maxLength: 3, placeholder: "USD" })}
                 </div>
-                <div style={{ display: "flex", gap: 10 }}>
-                  <button
-                    type="submit"
-                    disabled={busy}
-                    style={{
-                      background: "#2563eb",
-                      color: "#ffffff",
-                      border: "none",
-                      borderRadius: 6,
-                      padding: "8px 18px",
-                      fontSize: 13,
-                      fontWeight: 700,
-                      cursor: "pointer",
-                    }}
-                  >
-                    {busy ? "Saving..." : "✓ Save Corrected Values"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditMode(false)}
-                    style={{
-                      background: "#f1f5f9",
-                      color: "#475569",
-                      border: "1px solid #cbd5e1",
-                      borderRadius: 6,
-                      padding: "8px 14px",
-                      fontSize: 13,
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
-                  >
-                    Cancel
-                  </button>
+                <div className="row" style={{ marginTop: 16 }}>
+                  <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? "Saving…" : "Save corrections"}</button>
+                  <button type="button" className="btn" onClick={() => setEditMode(false)}>Cancel</button>
                 </div>
               </form>
             ) : (
-              <>
-            {/* Field 1: Vendor / Issuer */}
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                <span style={{ fontSize: 10.5, fontWeight: 700, color: "#475569", letterSpacing: "0.5px" }}>
-                  VENDOR / SUPPLIER NAME
-                </span>
-                <span
-                  style={{
-                    background: vendorName ? "#ccfbf1" : "#f1f5f9",
-                    color: vendorName ? "#0f766e" : "#64748b",
-                    fontSize: 10.5,
-                    fontWeight: 700,
-                    padding: "1px 6px",
-                    borderRadius: 4,
-                  }}
-                >
-                  {vendorName ? `✔ ${Math.round((currentResult.overall_confidence || 0.95) * 100)}% Confidence` : "Not Detected"}
-                </span>
-              </div>
-              <div
-                style={{
-                  background: "#f8fafc",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: 6,
-                  padding: "8px 12px",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: vendorName ? "#0f172a" : "#94a3b8",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <span>{vendorName || "—"}</span>
-                {vendorName && <span style={{ color: "#0284c7", fontSize: 13 }}>🔒</span>}
-              </div>
-            </div>
+              <dl className="facts" style={{ margin: 0 }}>
+                {fact("Supplier", supplier, false, true)}
+                {fact("Customer", customer)}
+                {fact("Invoice number", invoiceNo, true)}
+                {fact("Invoice date", invoiceDate, true)}
+                {fact("Currency", currency, true)}
+              </dl>
+            )}
+          </section>
 
-            {/* Field 2: Customer / Billed Entity */}
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                <span style={{ fontSize: 10.5, fontWeight: 700, color: "#475569", letterSpacing: "0.5px" }}>
-                  CUSTOMER / BILLED ENTITY
-                </span>
-                <span
-                  style={{
-                    background: customerName ? "#ccfbf1" : "#f1f5f9",
-                    color: customerName ? "#0f766e" : "#64748b",
-                    fontSize: 10.5,
-                    fontWeight: 700,
-                    padding: "1px 6px",
-                    borderRadius: 4,
-                  }}
-                >
-                  {customerName ? `✔ ${Math.round((currentResult.overall_confidence || 0.95) * 100)}% Confidence` : "Not Specified (Null)"}
-                </span>
+          {/* ------------------------------------------------ the ledger (signature) */}
+          {!isRejected && (
+            <section className="card" aria-label="Reconciliation">
+              <div className="card-head">
+                <h2 className="card-title">Reconciliation</h2>
+                <span className="eyebrow">Amounts in {currency}</span>
               </div>
-              <div
-                style={{
-                  background: "#f8fafc",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: 6,
-                  padding: "8px 12px",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: customerName ? "#0f172a" : "#94a3b8",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <span>{customerName || "— (No customer stated)"}</span>
-                {customerName && <span style={{ color: "#0284c7", fontSize: 13 }}>🔒</span>}
-              </div>
-            </div>
-
-            {/* Field 3: Document Date */}
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                <span style={{ fontSize: 10.5, fontWeight: 700, color: "#475569", letterSpacing: "0.5px" }}>
-                  DOCUMENT DATE
-                </span>
-                <span
-                  style={{
-                    background: docDate ? "#ccfbf1" : "#f1f5f9",
-                    color: docDate ? "#0f766e" : "#64748b",
-                    fontSize: 10.5,
-                    fontWeight: 700,
-                    padding: "1px 6px",
-                    borderRadius: 4,
-                  }}
-                >
-                  {docDate ? `✔ ${Math.round((currentResult.overall_confidence || 0.95) * 100)}% Confidence` : "Not Detected"}
-                </span>
-              </div>
-              <div
-                style={{
-                  background: "#f8fafc",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: 6,
-                  padding: "8px 12px",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: docDate ? "#0f172a" : "#94a3b8",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <span>{docDate || "—"}</span>
-                {docDate && <span style={{ color: "#0284c7", fontSize: 13 }}>🔒</span>}
-              </div>
-            </div>
-
-            {/* Field 4: Invoice / Reference Number */}
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                <span style={{ fontSize: 10.5, fontWeight: 700, color: "#475569", letterSpacing: "0.5px" }}>
-                  INVOICE / WAYBILL NUMBER
-                </span>
-                <span
-                  style={{
-                    background: invoiceNumber ? "#ccfbf1" : "#f1f5f9",
-                    color: invoiceNumber ? "#0f766e" : "#64748b",
-                    fontSize: 10.5,
-                    fontWeight: 700,
-                    padding: "1px 6px",
-                    borderRadius: 4,
-                  }}
-                >
-                  {invoiceNumber ? `✔ ${Math.round((currentResult.overall_confidence || 0.95) * 100)}% Confidence` : "Not Detected"}
-                </span>
-              </div>
-              <div
-                style={{
-                  background: "#f8fafc",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: 6,
-                  padding: "8px 12px",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: invoiceNumber ? "#0f172a" : "#94a3b8",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <span>{invoiceNumber || "—"}</span>
-                {invoiceNumber && <span style={{ color: "#0284c7", fontSize: 13 }}>🔒</span>}
-              </div>
-            </div>
-
-            {/* Field 5: Base Subtotal */}
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                <span style={{ fontSize: 10.5, fontWeight: 700, color: "#475569", letterSpacing: "0.5px" }}>
-                  EXTRACTED BASE SUBTOTAL
-                </span>
-                <span
-                  style={{
-                    background: subtotalVal !== null ? "#ccfbf1" : "#f1f5f9",
-                    color: subtotalVal !== null ? "#0f766e" : "#64748b",
-                    fontSize: 10.5,
-                    fontWeight: 700,
-                    padding: "1px 6px",
-                    borderRadius: 4,
-                  }}
-                >
-                  {subtotalVal !== null ? `✔ ${Math.round((currentResult.overall_confidence || 0.95) * 100)}% Confidence` : "Not Detected"}
-                </span>
-              </div>
-              <div
-                style={{
-                  background: "#f8fafc",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: 6,
-                  padding: "8px 12px",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: subtotalVal !== null ? "#0f172a" : "#94a3b8",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <span>{subtotalVal !== null ? money(subtotalVal, currency) : "—"}</span>
-                {subtotalVal !== null && (
-                  <button
-                    type="button"
-                    onClick={startEditing}
-                    title="Correct this value"
-                    style={{ background: "none", border: "none", color: "#64748b", fontSize: 13, cursor: "pointer", padding: 0 }}
-                  >
-                    ✎
-                  </button>
+              <dl className="ledger" style={{ margin: 0 }}>
+                <div className="ledger-row"><dt>Subtotal</dt><dd>{subtotal !== null ? money(subtotal) : "—"}</dd></div>
+                <div className="ledger-row"><dt>Tax</dt><dd>{tax !== null ? money(tax) : "—"}</dd></div>
+                {expected !== null && <div className="ledger-row sum"><dt>{basis}</dt><dd>{money(expected)}</dd></div>}
+                <div className="ledger-row total"><dt>Total stated</dt><dd>{total !== null ? money(total) : "—"}</dd></div>
+              </dl>
+              <div style={{ padding: "0 20px 18px" }}>
+                {variance === null ? (
+                  <div className="ledger-check off"><Info size={15} /> Not enough figures to check the arithmetic.</div>
+                ) : mathOff ? (
+                  <div className="ledger-check off">
+                    <AlertTriangle size={15} />
+                    {doc.status === "completed" ? "Stated total accepted by a reviewer" : "Stated total does not match the figures above"}
+                    <span className="mono">{variance > 0 ? "+" : "−"}{money(Math.abs(variance))}</span>
+                  </div>
+                ) : (
+                  <div className="ledger-check ok"><CheckCircle2 size={15} /> The figures add up</div>
                 )}
               </div>
-            </div>
-
-            {/* Field 6: Tax / Surcharge */}
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                <span style={{ fontSize: 10.5, fontWeight: 700, color: hasDiscrepancy ? "#991b1b" : "#475569", letterSpacing: "0.5px" }}>
-                  {hasDiscrepancy && "⚠ "}TAX / SURCHARGE
-                </span>
-                <span
-                  style={{
-                    background: hasDiscrepancy ? "#ffe4e6" : taxVal !== null ? "#ccfbf1" : "#f1f5f9",
-                    color: hasDiscrepancy ? "#e11d48" : taxVal !== null ? "#0f766e" : "#64748b",
-                    fontSize: 10.5,
-                    fontWeight: 700,
-                    padding: "1px 6px",
-                    borderRadius: 4,
-                  }}
-                >
-                  {hasDiscrepancy ? "Needs Check" : taxVal !== null ? `✔ ${Math.round((currentResult.overall_confidence || 0.95) * 100)}% Confidence` : "Not Detected"}
-                </span>
-              </div>
-              <div
-                style={{
-                  background: hasDiscrepancy ? "#ffffff" : "#f8fafc",
-                  border: hasDiscrepancy ? "1px solid #fecaca" : "1px solid #e2e8f0",
-                  borderRadius: 6,
-                  padding: "8px 12px",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  color: hasDiscrepancy ? "#dc2626" : taxVal !== null ? "#0f172a" : "#94a3b8",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <span>{taxVal !== null ? money(taxVal, currency) : "—"}</span>
-                {taxVal !== null && <span style={{ color: "#64748b", fontSize: 14 }}>👁</span>}
-              </div>
-            </div>
-
-            {/* Field 7: Total Amount Extracted */}
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                <span style={{ fontSize: 10.5, fontWeight: 700, color: hasDiscrepancy ? "#991b1b" : "#475569", letterSpacing: "0.5px" }}>
-                  {hasDiscrepancy && "ⓘ "}TOTAL AMOUNT EXTRACTED
-                </span>
-                <span
-                  style={{
-                    background: hasDiscrepancy ? "#ffe4e6" : totalVal !== null ? "#ccfbf1" : "#f1f5f9",
-                    color: hasDiscrepancy ? "#e11d48" : totalVal !== null ? "#0f766e" : "#64748b",
-                    fontSize: 10.5,
-                    fontWeight: 700,
-                    padding: "1px 6px",
-                    borderRadius: 4,
-                  }}
-                >
-                  {hasDiscrepancy ? "Discrepancy" : totalVal !== null ? `✔ ${Math.round((currentResult.overall_confidence || 0.95) * 100)}% Confidence` : "Not Detected"}
-                </span>
-              </div>
-              <div
-                style={{
-                  background: hasDiscrepancy ? "#ffffff" : "#f8fafc",
-                  border: hasDiscrepancy ? "1px solid #fecaca" : "1px solid #e2e8f0",
-                  borderRadius: 6,
-                  padding: "8px 12px",
-                  fontSize: 13.5,
-                  fontWeight: 800,
-                  color: hasDiscrepancy ? "#dc2626" : totalVal !== null ? "#0f172a" : "#94a3b8",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <span>{totalVal !== null ? money(totalVal, currency) : "—"}</span>
-                {totalVal !== null && <span style={{ color: "#64748b", fontSize: 14 }}>👁</span>}
-              </div>
-            </div>
-
-            {/* Field 7: Currency */}
-            <div style={{ marginTop: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                <span style={{ fontSize: 10.5, fontWeight: 700, color: "#475569", letterSpacing: "0.5px" }}>
-                  CURRENCY
-                </span>
-                <span
-                  style={{
-                    background: "#eff6ff",
-                    color: "#1d4ed8",
-                    fontSize: 10.5,
-                    fontWeight: 700,
-                    padding: "1px 6px",
-                    borderRadius: 4,
-                  }}
-                >
-                  ISO Code
-                </span>
-              </div>
-              <div
-                style={{
-                  background: "#f8fafc",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: 6,
-                  padding: "8px 12px",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: "#0f172a",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <span>{currency}</span>
-                <span style={{ color: "#64748b", fontSize: 12 }}>Standard</span>
-              </div>
-            </div>
-            </>
+            </section>
           )}
-          </div>
 
-          {/* CARD 3: REAL PARSED LINE ITEMS (100% DYNAMIC) */}
-          <div
-            style={{
-              background: "#ffffff",
-              border: "1px solid #e2e8f0",
-              borderRadius: 8,
-              padding: "18px 20px",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ color: "#2563eb", fontSize: 15 }}>🗋</span>
-                <span style={{ fontSize: 13.5, fontWeight: 700, color: "#0f172a" }}>Parsed Line Items</span>
+          {/* ------------------------------------------------ line items */}
+          {!isRejected && (
+            <section className="card" aria-label="Line items">
+              <div className="card-head">
+                <h2 className="card-title">Line items</h2>
+                <span className="muted small">{lineItems.length} found</span>
               </div>
-              <span style={{ fontSize: 11.5, color: "#64748b", fontWeight: 500 }}>
-                {lineItems.length} Item{lineItems.length === 1 ? "" : "s"} Extracted
-              </span>
-            </div>
-
-            {lineItems.length === 0 ? (
-              <div
-                style={{
-                  padding: "24px 16px",
-                  textAlign: "center",
-                  background: "#f8fafc",
-                  borderRadius: 6,
-                  border: "1px solid #e2e8f0",
-                  color: "#64748b",
-                  fontSize: 12.5,
-                }}
-              >
-                {isRejected
-                  ? `Classified as ${documentType}: No commercial billing line items or payable charges detected in this document.`
-                  : "No itemized line items detected. Check raw OCR text."}
-              </div>
-            ) : (
-              <div style={{ border: "1px solid #e2e8f0", borderRadius: 6, overflow: "hidden" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                  <thead>
-                    <tr style={{ background: "#f8fafc", textAlign: "left", borderBottom: "1px solid #e2e8f0" }}>
-                      <th style={{ padding: "8px 10px", fontSize: 10, fontWeight: 700, color: "#64748b" }}>DESCRIPTION</th>
-                      <th style={{ padding: "8px 6px", fontSize: 10, fontWeight: 700, color: "#64748b", textAlign: "center", width: 44 }}>QTY</th>
-                      <th style={{ padding: "8px 8px", fontSize: 10, fontWeight: 700, color: "#64748b", textAlign: "right", width: 75 }}>RATE</th>
-                      <th style={{ padding: "8px 8px", fontSize: 10, fontWeight: 700, color: "#64748b", textAlign: "right", width: 85 }}>TOTAL</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lineItems.map((item, idx) => (
-                      <tr
-                        key={idx}
-                        style={{
-                          borderBottom: idx < lineItems.length - 1 ? "1px solid #f1f5f9" : "none",
-                        }}
-                      >
-                        <td style={{ padding: "9px 10px", fontWeight: 500, color: "#1e293b" }}>
-                          {item.description || "Item"}
-                        </td>
-                        <td style={{ padding: "9px 6px", textAlign: "center", color: "#64748b" }}>
-                          {item.quantity ?? 1}
-                        </td>
-                        <td style={{ padding: "9px 8px", textAlign: "right", color: "#334155" }}>
-                          {item.unit_price != null ? `$${Number(item.unit_price).toFixed(2)}` : "—"}
-                        </td>
-                        <td style={{ padding: "9px 8px", textAlign: "right", fontWeight: 600, color: "#0f172a" }}>
-                          {item.amount != null ? `$${Number(item.amount).toFixed(2)}` : "—"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          {/* CARD 4: AUDIT TRAIL & LINEAGE (Matches history store) */}
-          <div
-            id="audit-lineage"
-            style={{
-              background: "#ffffff",
-              border: "1px solid #e2e8f0",
-              borderRadius: 8,
-              padding: "16px 18px",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontSize: 14 }}>🔗</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>
-                  Audit Trail &amp; Processing Lineage
-                </span>
-              </div>
-              <span style={{ fontSize: 11, color: "#64748b", fontWeight: 500 }}>
-                Immutable Stream
-              </span>
-            </div>
-
-            <div style={{ display: "grid", gap: 8 }}>
-              {history.length > 0 ? (
-                history.map((h, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      display: "flex",
-                      alignItems: "flex-start",
-                      gap: 8,
-                      fontSize: 11.5,
-                      color: "#475569",
-                      padding: "6px 0",
-                      borderBottom: i < history.length - 1 ? "1px solid #f1f5f9" : "none",
-                    }}
-                  >
-                    <span style={{ color: "#2563eb", fontWeight: 700 }}>•</span>
-                    <div style={{ flex: 1 }}>
-                      <strong style={{ color: "#0f172a" }}>{h.action}</strong>: {h.message}
-                    </div>
-                    <span style={{ color: "#94a3b8", whiteSpace: "nowrap", fontSize: 10.5 }}>
-                      {h.timestamp ? new Date(h.timestamp).toLocaleTimeString() : ""}
-                    </span>
-                  </div>
-                ))
+              {lineItems.length === 0 ? (
+                <div className="empty" style={{ padding: "28px 20px" }}>No itemised lines were found. Check the page text.</div>
               ) : (
-                <div style={{ fontSize: 12, color: "#64748b" }}>
-                  Intake completed. Multi-page parser processed document across {totalPages} page(s).
+                <div className="table-wrap">
+                  <table className="t">
+                    <thead>
+                      <tr><th>Description</th><th className="num">Qty</th><th className="num">Unit price</th><th className="num">Amount</th></tr>
+                    </thead>
+                    <tbody>
+                      {lineItems.map((it, i) => (
+                        <tr key={i}>
+                          <td>{it.description || "Item"}</td>
+                          <td className="num">{it.quantity ?? "—"}</td>
+                          <td className="num">{it.unit_price != null ? money(Number(it.unit_price)) : "—"}</td>
+                          <td className="num">{it.amount != null ? money(Number(it.amount)) : "—"}</td>
+                        </tr>
+                      ))}
+                      {lineSum !== null && (
+                        <tr>
+                          <td colSpan={3} className="muted" style={{ textAlign: "right" }}>
+                            Lines add up to{linesOff ? ` — the subtotal says ${money(subtotal)}` : ""}
+                          </td>
+                          <td className="num" style={{ fontWeight: 600, color: linesOff ? "var(--review-ink)" : undefined }}>{money(lineSum)}</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               )}
-            </div>
-          </div>
+            </section>
+          )}
+
+          {/* ------------------------------------------------ activity */}
+          <section className="card" id="activity" aria-label="Activity">
+            <div className="card-head"><h2 className="card-title"><FileSearch size={16} /> Activity</h2></div>
+            {history.length ? (
+              <ol className="timeline">
+                {[...history].reverse().map((h, i) => (
+                  <li key={i}>
+                    <span><b>{h.action}</b> — {h.message}</span>
+                    <time>{h.timestamp ? new Date(h.timestamp).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : ""}</time>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <div className="empty" style={{ padding: "24px 20px" }}>No activity recorded yet.</div>
+            )}
+          </section>
         </div>
       </div>
     </div>

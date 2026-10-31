@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bytes, confidenceLevel, diffFields, duration, issuesByField, money, parseField } from "../lib/format";
+import { bytes, confidenceLevel, diffFields, duration, fileKind, issuesByField, money, parseField, shortDate } from "../lib/format";
 import type { InvoiceData, Issue } from "../lib/types";
 
 const inv = (o: Partial<InvoiceData> = {}): InvoiceData => ({
@@ -50,5 +50,17 @@ describe("format", () => {
     expect(diffFields(inv(), inv({ total: 120 }))).toEqual({ total: 120 });
     const items = [{ description: "x", quantity: 1, unit_price: 1, amount: 1 }];
     expect(diffFields(inv(), inv({ line_items: items }))).toEqual({ line_items: items });
+  });
+  it("fileKind tells PDFs, images and spreadsheets apart by type or extension", () => {
+    expect(fileKind("application/pdf", "a.pdf")).toEqual({ kind: "pdf", label: "PDF" });
+    expect(fileKind("", "scan.PNG")).toEqual({ kind: "image", label: "PNG" });
+    expect(fileKind("text/csv", "ledger.csv")).toEqual({ kind: "sheet", label: "CSV" });
+    expect(fileKind("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "b.xlsx")).toEqual({ kind: "sheet", label: "XLS" });
+    expect(fileKind(null, "notes.docx").kind).toBe("other");
+  });
+  it("shortDate formats an ISO date and survives bad input", () => {
+    expect(shortDate(null)).toBe("—");
+    expect(shortDate("not a date")).toBe("not a date");
+    expect(shortDate("2026-05-02T10:00:00Z")).toMatch(/2026/);
   });
 });

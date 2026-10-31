@@ -38,7 +38,7 @@ const initialState: DocumentsState = {
   typeFilter: "All",
   searchQuery: "",
   page: 1,
-  pageSize: 5,
+  pageSize: 10,
   selectedIds: [],
 };
 
