@@ -272,6 +272,12 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           {!isRejected && doc.status !== "completed" && doc.status !== "failed" && !inFlight && (
             <button type="button" className="btn btn-verify" onClick={approve} disabled={busy}><Check size={15} /> Approve</button>
           )}
+          {doc.status === "completed" && doc.original_available && !inFlight && (
+            <button type="button" className="btn" onClick={approve} disabled={busy}
+              title="This document passed every check. Accepting it deletes the stored original file; the extracted data stays.">
+              <Check size={15} /> Accept and delete original
+            </button>
+          )}
         </div>
       </div>
 
