@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { bytes, money } from "@/lib/format";
+import FilePreview from "@/components/FilePreview";
 import type { DocumentOut, ResultOut } from "@/lib/types";
 
 // Helper to extract page-by-page text from raw OCR text
@@ -812,27 +813,7 @@ export default function DocumentDetailsPage({
                 position: "relative",
               }}
             >
-              {/^(application\/pdf|image\/)/.test(doc.file_type || "") ? (
-                <iframe
-                  src={`${api.fileUrl(doc.id)}#page=${currentPage}`}
-                  title={`${doc.filename} - Page ${currentPage}`}
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    border: "none",
-                    transform: `scale(${zoomLevel / 100})`,
-                    transformOrigin: "top left",
-                  }}
-                />
-              ) : (
-                <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, color: "#475569", fontSize: 14, padding: 24, textAlign: "center" }}>
-                  <div>A browser cannot preview this file type ({doc.file_type || "unknown"}).</div>
-                  <div>Use the “Extracted Text” tabs to see what was read, or download the original.</div>
-                  <a href={api.fileUrl(doc.id)} download={doc.filename} style={{ color: "#2563eb", fontWeight: 600 }}>
-                    Download {doc.filename}
-                  </a>
-                </div>
-              )}
+              <FilePreview url={api.fileUrl(doc.id)} fileType={doc.file_type || ""} filename={doc.filename} page={currentPage} zoom={zoomLevel} />
             </div>
           ) : viewMode === "page_text" ? (
             <div
