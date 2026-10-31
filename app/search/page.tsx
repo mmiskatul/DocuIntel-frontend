@@ -8,7 +8,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { money } from "@/lib/format";
 import type { DocFilters } from "@/lib/types";
 import { useAppDispatch, useAppSelector } from "@/store";
-import { runFilterSearch, runRagQuery, runSearch, setMode, setQuery, type SearchMode } from "@/store/searchSlice";
+import { clearRecent, runFilterSearch, runRagQuery, runSearch, setMode, setQuery, type SearchMode } from "@/store/searchSlice";
 
 const MODES: { id: SearchMode; label: string; hint: string; icon: typeof Search }[] = [
   { id: "rag", label: "Ask a question", hint: "Get an answer written from your documents, with the sources it used", icon: MessageSquareText },
@@ -26,7 +26,7 @@ const EXAMPLES = [
 export default function SearchPage() {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { query: q, mode, hits, docs, ragResult, loading, ragLoading, error: reduxError } = useAppSelector((s) => s.search);
+  const { query: q, mode, hits, docs, ragResult, loading, ragLoading, error: reduxError, recent } = useAppSelector((s) => s.search);
 
   // Render the default mode on the server and first client pass so the HTML matches
   const [mounted, setMounted] = useState(false);
@@ -120,6 +120,20 @@ export default function SearchPage() {
             {busy ? <><Loader2 size={15} className="spin" /> {activeMode === "rag" ? "Reading…" : "Searching…"}</> : activeMode === "rag" ? <><Sparkles size={15} /> Ask</> : "Search"}
           </button>
         </div>
+
+        {activeMode !== "filters" && recent.length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            <div className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}>
+              <span className="eyebrow">Recent</span>
+              <button type="button" className="link small" onClick={() => dispatch(clearRecent())}>Clear</button>
+            </div>
+            <div className="chips">
+              {recent.map((r) => (
+                <button key={r} type="button" className="chip" onClick={() => { dispatch(setQuery(r)); void execute(r, activeMode); }}>{r}</button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {activeMode !== "filters" && (
           <div style={{ marginTop: 14 }}>

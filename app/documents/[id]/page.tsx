@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { use, useCallback, useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import {
   AlertTriangle, ArrowLeft, Check, CheckCircle2, ChevronLeft, ChevronRight, FileSearch, Info, Loader2,
   Minus, Pencil, Plus, RotateCw, ShieldX, Trash2, X, XCircle,
@@ -11,11 +11,12 @@ import FilePreview from "@/components/FilePreview";
 import { ProgressBar, StatusBadge } from "@/components/StatusBadge";
 import { api } from "@/lib/api";
 import { bytes, fileKind, money, shortDate } from "@/lib/format";
-import { IN_FLIGHT, type DocumentOut, type ResultOut } from "@/lib/types";
-
-const REVIEWER = "reviewer@docuintel.com";
-type Notice = { type: "success" | "error" | "info"; text: string };
-type ViewMode = "preview" | "page_text" | "all_text";
+import { IN_FLIGHT, type ResultOut } from "@/lib/types";
+import { useAppDispatch, useAppSelector } from "@/store";
+import {
+  approveDocument, correctDocument, deleteDocument, fetchDocumentDetails, reconcileDocument, rejectDocument, rerunDocument,
+} from "@/store/documentsSlice";
+import { setViewMode, setZoom } from "@/store/uiSlice";
 
 // Splits the stored OCR text into pages ("--- Page N ---" markers)
 function parsePagesFromText(rawText: string): Record<number, string> {
@@ -31,59 +32,42 @@ function parsePagesFromText(rawText: string): Record<number, string> {
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+const NONE: any[] = []; // a stable empty list, so a document without results does not re-render forever
 
 export default function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: docId } = use(params);
   const router = useRouter();
+  const dispatch = useAppDispatch();
 
-  const [doc, setDoc] = useState<DocumentOut | null>(null);
-  const [results, setResults] = useState<ResultOut[]>([]);
+  // Server data lives in the store. A document you have opened before appears at once and is refreshed quietly.
+  const detail = useAppSelector((s) => s.documents.details[docId]);
+  const loadState = useAppSelector((s) => s.documents.detailState[docId]);
+  const loadError = useAppSelector((s) => s.documents.detailError[docId]);
+  const busy = useAppSelector((s) => s.documents.busyIds.includes(docId));
+  const { zoom, viewMode } = useAppSelector((s) => s.ui); // viewer preferences are remembered between visits
+  const doc = detail?.doc ?? null;
+  const results: ResultOut[] = detail?.results ?? NONE;
+  const history: any[] = detail?.history ?? NONE;
+
+  // Only transient screen state stays local to this page
   const [invoiceIdx, setInvoiceIdx] = useState(0);
-  const [history, setHistory] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
   const [currentPage, setCurrentPage] = useState(1);
-  const [viewMode, setViewMode] = useState<ViewMode>("preview");
-  const [zoom, setZoom] = useState(100);
-
-  const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<Notice | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
   const [customTotal, setCustomTotal] = useState("");
   const [editMode, setEditMode] = useState(false);
   const [edit, setEdit] = useState({ supplier_name: "", customer_name: "", invoice_date: "", invoice_number: "", subtotal: "", tax: "", total: "", currency: "USD" });
 
-  const loadData = useCallback(async (silent = false) => {
-    try {
-      if (!silent) setLoading(true);
-      const [d, r, h] = await Promise.all([
-        api.getDocument(docId),
-        api.getResults(docId).catch(() => []),
-        api.getHistory(docId).catch(() => []),
-      ]);
-      setDoc(d);
-      setResults(r || []);
-      setHistory(h || []);
-      setError(null);
-    } catch (err: any) {
-      setError(err.message || "Could not load this document.");
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }, [docId]);
-
-  useEffect(() => { void loadData(); }, [loadData]);
+  useEffect(() => { void dispatch(fetchDocumentDetails({ id: docId })); }, [dispatch, docId]);
 
   // Follow a document that is still being processed (first upload or a re-run)
   const inFlight = !!doc && IN_FLIGHT.includes(doc.status);
   useEffect(() => {
     if (!inFlight) return;
-    const t = setInterval(() => void loadData(true), 2500);
+    const t = setInterval(() => void dispatch(fetchDocumentDetails({ id: docId, silent: true })), 2500);
     return () => clearInterval(t);
-  }, [inFlight, loadData]);
+  }, [inFlight, docId, dispatch]);
 
-  if (loading) {
+  if (!doc && loadState !== "error") {
     return (
       <div className="stack" aria-busy="true">
         <div className="skeleton" style={{ height: 34, width: 320 }} />
@@ -92,12 +76,12 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
       </div>
     );
   }
-  if (error || !doc) {
+  if (!doc) {
     return (
       <div className="card empty" style={{ maxWidth: 520, margin: "40px auto" }}>
         <XCircle size={36} />
         <strong>We could not open this document</strong>
-        <p>{error || "It may have been deleted."}</p>
+        <p>{loadError || "It may have been deleted."}</p>
         <Link href="/" className="btn btn-primary" style={{ marginTop: 16 }}><ArrowLeft size={15} /> Back to documents</Link>
       </div>
     );
@@ -142,62 +126,34 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   const lineSum = lineItems.length ? round2(lineItems.reduce((a, i) => a + (Number(i.amount) || 0), 0)) : null;
   const linesOff = lineSum !== null && subtotal !== null && Math.abs(lineSum - subtotal) > 0.05;
 
-  const ok = (m: string) => setNotice({ type: "success", text: m });
-  const fail = (m: string) => setNotice({ type: "error", text: m });
+  // ------------------------------------------------------------------ actions (the store applies them at once, confirms with a toast, and undoes them if the server refuses)
+  const approve = () => void dispatch(approveDocument({ id: doc.id }));
 
-  const run = async (fn: () => Promise<void>, errPrefix: string) => {
-    setBusy(true);
-    try { await fn(); } catch (err: any) { fail(`${errPrefix}: ${err.message}`); } finally { setBusy(false); }
+  const applySum = () => {
+    if (expected !== null) void dispatch(reconcileDocument({ id: doc.id, currency, payload: { subtotal: subtotal ?? undefined, tax: tax ?? undefined, total: expected, action: "apply_sum" } }));
   };
 
-  // ------------------------------------------------------------------ actions
-  const approve = () => run(async () => {
-    const r = await api.approve(doc.id, REVIEWER);
-    ok(r.original_removed
-      ? "Approved. The document is verified and searchable, and its original file was deleted from storage."
-      : "Approved. The document is verified and now searchable.");
-    await loadData(true);
-  }, "Could not approve");
-
-  const applySum = () => expected !== null && run(async () => {
-    await api.reconcile(doc.id, { subtotal: subtotal ?? undefined, tax: tax ?? undefined, total: expected!, action: "apply_sum", reviewer: REVIEWER });
-    ok(`Total corrected to ${money(expected, currency)} and the document is verified.`);
-    await loadData(true);
-  }, "Could not apply the calculated total");
-
-  const keepStated = () => total !== null && run(async () => {
-    await api.reconcile(doc.id, { subtotal: subtotal ?? undefined, tax: tax ?? undefined, total, action: "override", reviewer: REVIEWER });
-    ok(`Stated total of ${money(total, currency)} accepted and the document is verified.`);
-    await loadData(true);
-  }, "Could not accept the stated total");
-
-  const saveCustomTotal = () => customTotal && run(async () => {
-    await api.reconcile(doc.id, { total: parseFloat(customTotal), action: "manual", reviewer: REVIEWER } as any);
-    ok(`Total set to ${money(parseFloat(customTotal), currency)} and the document is verified.`);
-    setManualOpen(false);
-    setCustomTotal("");
-    await loadData(true);
-  }, "Could not save the total");
-
-  const reject = async () => {
-    if (!confirm("Reject this document? It will be excluded from search.")) return;
-    await run(async () => {
-      await api.reject(doc.id, "Not a supported invoice, waybill or receipt.", REVIEWER);
-      fail("Rejected. The document is excluded from search.");
-      await loadData(true);
-    }, "Could not reject");
+  const keepStated = () => {
+    if (total !== null) void dispatch(reconcileDocument({ id: doc.id, currency, payload: { subtotal: subtotal ?? undefined, tax: tax ?? undefined, total, action: "override" } }));
   };
 
-  const remove = async () => {
+  const saveCustomTotal = () => {
+    if (!customTotal) return;
+    dispatch(reconcileDocument({ id: doc.id, currency, payload: { total: parseFloat(customTotal), action: "manual" } }))
+      .unwrap().then(() => { setManualOpen(false); setCustomTotal(""); }).catch(() => undefined);
+  };
+
+  const reject = () => {
+    if (confirm("Reject this document? It will be excluded from search.")) void dispatch(rejectDocument({ id: doc.id }));
+  };
+
+  const remove = () => {
     if (!confirm(`Delete ${doc.filename}? This cannot be undone.`)) return;
-    try { await api.deleteDocument(doc.id); router.push("/"); } catch (err: any) { fail(`Could not delete: ${err.message}`); }
+    router.push("/"); // the document leaves the list at once; if the delete fails it comes back with a message
+    void dispatch(deleteDocument({ id: doc.id, filename: doc.filename }));
   };
 
-  const rerun = () => run(async () => {
-    await api.rerunOcr(doc.id);
-    setNotice({ type: "info", text: "Reading the document again. This page updates when it finishes." });
-    await loadData(true);
-  }, "Could not restart processing");
+  const rerun = () => void dispatch(rerunDocument({ id: doc.id }));
 
   const startEdit = () => {
     setEdit({
@@ -207,7 +163,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     setEditMode(true);
   };
 
-  const saveEdit = () => run(async () => {
+  const saveEdit = () => {
     const c: Record<string, any> = {
       supplier_name: edit.supplier_name.trim() || undefined, customer_name: edit.customer_name.trim() || undefined,
       invoice_date: edit.invoice_date.trim() || undefined, invoice_number: edit.invoice_number.trim() || undefined,
@@ -216,11 +172,8 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     if (edit.subtotal !== "") c.subtotal = parseFloat(edit.subtotal);
     if (edit.tax !== "") c.tax = parseFloat(edit.tax);
     if (edit.total !== "") c.total = parseFloat(edit.total);
-    await api.correctDocument(doc.id, c, undefined, current?.id);
-    ok("Corrections saved.");
-    setEditMode(false);
-    await loadData(true);
-  }, "Could not save corrections");
+    dispatch(correctDocument({ id: doc.id, corrections: c, resultId: current?.id })).unwrap().then(() => setEditMode(false)).catch(() => undefined);
+  };
 
   // ------------------------------------------------------------------ view helpers
   const kind = fileKind(doc.file_type, doc.filename);
@@ -316,14 +269,6 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
         </div>
       )}
 
-      {notice && (
-        <div className={`alert alert-${notice.type === "error" ? "error" : notice.type === "info" ? "info" : "ok"}`} role="status">
-          {notice.type === "error" ? <AlertTriangle size={16} /> : notice.type === "info" ? <Info size={16} /> : <CheckCircle2 size={16} />}
-          <div>{notice.text}</div>
-          <button type="button" className="btn-icon" aria-label="Dismiss" onClick={() => setNotice(null)}><X size={15} /></button>
-        </div>
-      )}
-
       <div className="workspace">
         {/* ---------------------------------------------------------------- source page */}
         <section className="card viewer" aria-label="Original document">
@@ -335,15 +280,15 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
             </div>
             {viewMode === "preview" && (
               <div className="stepper">
-                <button type="button" className="btn-icon" aria-label="Zoom out" disabled={zoom <= 50} onClick={() => setZoom((z) => Math.max(50, z - 10))}><Minus size={15} /></button>
+                <button type="button" className="btn-icon" aria-label="Zoom out" disabled={zoom <= 50} onClick={() => dispatch(setZoom(zoom - 10))}><Minus size={15} /></button>
                 <span className="pos mono" style={{ minWidth: 48 }}>{zoom}%</span>
-                <button type="button" className="btn-icon" aria-label="Zoom in" disabled={zoom >= 200} onClick={() => setZoom((z) => Math.min(200, z + 10))}><Plus size={15} /></button>
+                <button type="button" className="btn-icon" aria-label="Zoom in" disabled={zoom >= 200} onClick={() => dispatch(setZoom(zoom + 10))}><Plus size={15} /></button>
               </div>
             )}
             <div className="seg" role="tablist" aria-label="View">
-              <button type="button" role="tab" aria-selected={viewMode === "preview"} onClick={() => setViewMode("preview")}>Page</button>
-              <button type="button" role="tab" aria-selected={viewMode === "page_text"} onClick={() => setViewMode("page_text")}>Page text</button>
-              <button type="button" role="tab" aria-selected={viewMode === "all_text"} onClick={() => setViewMode("all_text")}>All text</button>
+              <button type="button" role="tab" aria-selected={viewMode === "preview"} onClick={() => dispatch(setViewMode("preview"))}>Page</button>
+              <button type="button" role="tab" aria-selected={viewMode === "page_text"} onClick={() => dispatch(setViewMode("page_text"))}>Page text</button>
+              <button type="button" role="tab" aria-selected={viewMode === "all_text"} onClick={() => dispatch(setViewMode("all_text"))}>All text</button>
             </div>
           </div>
           <div className="canvas">

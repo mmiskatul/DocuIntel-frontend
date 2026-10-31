@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import { AlertTriangle, CheckCircle2, GitCompareArrows, Info, Loader2 } from "lucide-react";
-import { api } from "@/lib/api";
 import { money } from "@/lib/format";
-import type { CrossVerifyReport, DocumentOut } from "@/lib/types";
+import type { CrossVerifyReport } from "@/lib/types";
+import { useAppDispatch, useAppSelector } from "@/store";
+import { runCrossVerify, setFlag, setLeft, setRight } from "@/store/verifySlice";
 
 const VERDICT: Record<CrossVerifyReport["verdict"], { tone: string; title: string; icon: React.ReactNode }> = {
   match: { tone: "ok", title: "Every shared invoice matches", icon: <CheckCircle2 size={18} /> },
@@ -20,28 +21,12 @@ const FIELD_LABEL: Record<string, string> = {
 const show = (v: unknown) => (v === null || v === undefined || v === "" ? "—" : typeof v === "number" ? money(v) : String(v));
 
 export default function CrossVerifyPage() {
-  const [docs, setDocs] = useState<DocumentOut[]>([]);
-  const [loaded, setLoaded] = useState(false);
-  const [left, setLeft] = useState("");
-  const [right, setRight] = useState("");
-  const [flag, setFlag] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [report, setReport] = useState<CrossVerifyReport | null>(null);
-
-  useEffect(() => {
-    api.listDocuments({ limit: 200 })
-      .then((all) => setDocs(all.filter((d) => d.status === "completed" || d.status === "needs_review")))
-      .catch((e) => setError(e.message))
-      .finally(() => setLoaded(true));
-  }, []);
-
-  const run = async () => {
-    setBusy(true);
-    setError(null);
-    setReport(null);
-    try { setReport(await api.crossVerify(left, right, flag)); } catch (e: any) { setError(e.message); } finally { setBusy(false); }
-  };
+  const dispatch = useAppDispatch();
+  // The documents come from the shared list, and the choices and the result stay when you leave and come back
+  const items = useAppSelector((s) => s.documents.items);
+  const listLoaded = useAppSelector((s) => s.documents.listLoaded);
+  const { left, right, flag, report, running: busy, error } = useAppSelector((s) => s.verify);
+  const docs = useMemo(() => items.filter((d) => d.status === "completed" || d.status === "needs_review"), [items]);
 
   const options = (exclude: string) => docs.filter((d) => d.id !== exclude).map((d) => <option key={d.id} value={d.id}>{d.filename}</option>);
   const v = report && VERDICT[report.verdict];
@@ -61,21 +46,21 @@ export default function CrossVerifyPage() {
       <section className="card card-pad">
         <div className="form-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
           <label className="field"><span>Document A</span>
-            <select className="select" value={left} onChange={(e) => setLeft(e.target.value)}><option value="">Choose a document</option>{options(right)}</select>
+            <select className="select" value={left} onChange={(e) => dispatch(setLeft(e.target.value))}><option value="">Choose a document</option>{options(right)}</select>
           </label>
           <label className="field"><span>Document B</span>
-            <select className="select" value={right} onChange={(e) => setRight(e.target.value)}><option value="">Choose a document</option>{options(left)}</select>
+            <select className="select" value={right} onChange={(e) => dispatch(setRight(e.target.value))}><option value="">Choose a document</option>{options(left)}</select>
           </label>
         </div>
         <div className="row" style={{ marginTop: 16, justifyContent: "space-between" }}>
-          <label className="check"><input type="checkbox" checked={flag} onChange={(e) => setFlag(e.target.checked)} /> Send mismatched invoices to review</label>
-          <button type="button" className="btn btn-primary" disabled={!left || !right || busy} onClick={run}>
+          <label className="check"><input type="checkbox" checked={flag} onChange={(e) => dispatch(setFlag(e.target.checked))} /> Send mismatched invoices to review</label>
+          <button type="button" className="btn btn-primary" disabled={!left || !right || busy} onClick={() => void dispatch(runCrossVerify())}>
             {busy ? <><Loader2 size={15} className="spin" /> Comparing…</> : <><GitCompareArrows size={15} /> Compare</>}
           </button>
         </div>
       </section>
 
-      {loaded && docs.length < 2 && !error && (
+      {listLoaded && docs.length < 2 && (
         <p className="muted" style={{ marginTop: 14 }}>You need at least two processed documents. <Link href="/" className="link">Upload documents</Link> first.</p>
       )}
       {error && <div className="alert alert-error" role="alert" style={{ marginTop: 16 }}><AlertTriangle size={16} /><div>{error}</div></div>}

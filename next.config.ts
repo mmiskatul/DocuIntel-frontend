@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const config: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  agentRules: false, // do not generate an AGENTS.md file in the project
   async headers() {
     return [
       {

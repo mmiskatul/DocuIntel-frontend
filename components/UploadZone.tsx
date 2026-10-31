@@ -1,9 +1,10 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { CheckCircle2, UploadCloud, X } from "lucide-react";
-import { api } from "@/lib/api";
+import { UploadCloud, X } from "lucide-react";
 import { bytes } from "@/lib/format";
+import { useAppDispatch } from "@/store";
+import { uploadDocuments } from "@/store/documentsSlice";
 
 export const ACCEPT = [".pdf", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".xlsx", ".xls", ".csv", ".doc", ".docx"];
 export const MAX_MB = 100;
@@ -16,17 +17,16 @@ export function validateFile(f: File): string | null {
   return null;
 }
 
-export function UploadZone({ onUploaded }: { onUploaded: () => void }) {
+export function UploadZone() {
+  const dispatch = useAppDispatch();
   const input = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [queuedCount, setQueuedCount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const add = (list: FileList | File[]) => {
     setError(null);
-    setQueuedCount(null);
     const incoming = Array.from(list);
     setFiles((prev) => {
       const seen = new Set(prev.map((f) => `${f.name}:${f.size}`));
@@ -42,12 +42,10 @@ export function UploadZone({ onUploaded }: { onUploaded: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      await api.upload(valid);
-      setQueuedCount(valid.length);
+      await dispatch(uploadDocuments(valid)).unwrap(); // the rows appear in the table at once; a toast confirms
       setFiles([]);
-      onUploaded();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Upload failed");
+      setError(typeof e === "string" ? e : "Upload failed"); // the files stay selected so the upload can be retried
     } finally {
       setBusy(false);
     }
@@ -100,14 +98,6 @@ export function UploadZone({ onUploaded }: { onUploaded: () => void }) {
       )}
 
       {error && <div className="alert alert-error" role="alert" style={{ marginTop: 12 }}><div>{error}</div></div>}
-
-      {queuedCount !== null && (
-        <div className="alert alert-ok" role="status" style={{ marginTop: 12 }}>
-          <CheckCircle2 size={16} />
-          <div><strong>{queuedCount} file{queuedCount === 1 ? "" : "s"} queued.</strong> They appear in the table below and update as each page is read.</div>
-          <button type="button" className="btn-icon" aria-label="Dismiss" onClick={() => setQueuedCount(null)}><X size={15} /></button>
-        </div>
-      )}
     </div>
   );
 }

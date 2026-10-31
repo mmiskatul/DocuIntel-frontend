@@ -291,3 +291,14 @@ table.t { width: 100%; border-collapse: collapse; }
 
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- Toasts ---------- */
+.toaster { position: fixed; right: 20px; bottom: 20px; z-index: 50; display: grid; gap: 10px; width: min(420px, calc(100vw - 32px)); pointer-events: none; }
+.toast { pointer-events: auto; display: flex; gap: 11px; align-items: flex-start; padding: 12px 12px 12px 14px; border-radius: var(--r-lg); border: 1px solid; box-shadow: 0 8px 24px rgba(21, 34, 43, .16); animation: toast-in .18s ease-out; font-size: 13.5px; }
+.toast > svg { flex: none; margin-top: 2px; }
+.toast > div { flex: 1; }
+.toast-success { background: var(--verified-soft); border-color: #a9d8d0; color: var(--verified-ink); }
+.toast-error { background: var(--reject-soft); border-color: #eab0ab; color: var(--reject-ink); }
+.toast-info { background: var(--working-soft); border-color: #b5c9e4; color: var(--working-ink); }
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
+@media (max-width: 720px) { .toaster { right: 16px; left: 16px; bottom: 16px; width: auto; } }

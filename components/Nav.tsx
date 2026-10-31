@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
 import { FileCheck2, FileText, GitCompareArrows, Search } from "lucide-react";
-import { api } from "@/lib/api";
+import { useAppSelector } from "@/store";
 
 const LINKS = [
   { href: "/", label: "Documents", icon: FileText, match: (p: string) => p === "/" || p.startsWith("/documents") },
@@ -14,14 +13,8 @@ const LINKS = [
 
 export function Nav() {
   const path = usePathname();
-  const [online, setOnline] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    const check = () => api.stats().then(() => setOnline(true)).catch(() => setOnline(false));
-    void check();
-    const id = setInterval(check, 45000);
-    return () => clearInterval(id);
-  }, []);
+  const connection = useAppSelector((s) => s.ui.connection);
+  const online = connection === "unknown" ? null : connection === "online";
 
   return (
     <header className="topbar">

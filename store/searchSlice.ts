@@ -13,7 +13,15 @@ export interface SearchState {
   loading: boolean;
   ragLoading: boolean;
   error: string | null;
+  /** the last few searches, newest first (kept between visits) */
+  recent: string[];
 }
+
+const MAX_RECENT = 6;
+const remember = (state: SearchState, q: string) => {
+  const t = q.trim();
+  if (t) state.recent = [t, ...state.recent.filter((x) => x.toLowerCase() !== t.toLowerCase())].slice(0, MAX_RECENT);
+};
 
 const initialState: SearchState = {
   query: "",
@@ -24,6 +32,7 @@ const initialState: SearchState = {
   loading: false,
   ragLoading: false,
   error: null,
+  recent: [],
 };
 
 export const runSearch = createAsyncThunk(
@@ -75,6 +84,12 @@ export const searchSlice = createSlice({
     setMode(state, action: PayloadAction<SearchMode>) {
       state.mode = action.payload;
     },
+    hydratePrefs(state, action: PayloadAction<Partial<Pick<SearchState, "mode" | "recent">>>) {
+      Object.assign(state, action.payload);
+    },
+    clearRecent(state) {
+      state.recent = [];
+    },
     setHits(state, action: PayloadAction<SearchHit[] | null>) {
       state.hits = action.payload;
     },
@@ -102,6 +117,7 @@ export const searchSlice = createSlice({
       .addCase(runSearch.fulfilled, (state, action) => {
         state.loading = false;
         state.hits = action.payload || [];
+        remember(state, action.meta.arg.q);
       })
       .addCase(runSearch.rejected, (state, action) => {
         state.loading = false;
@@ -117,6 +133,7 @@ export const searchSlice = createSlice({
         state.ragLoading = false;
         state.ragResult = action.payload;
         state.hits = action.payload?.hits || [];
+        remember(state, action.meta.arg.q);
       })
       .addCase(runRagQuery.rejected, (state, action) => {
         state.ragLoading = false;
@@ -142,6 +159,8 @@ export const searchSlice = createSlice({
 export const {
   setQuery,
   setMode,
+  hydratePrefs,
+  clearRecent,
   setHits,
   setDocs,
   setRagResult,
