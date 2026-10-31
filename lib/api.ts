@@ -78,7 +78,7 @@ export const api = {
   fileUrl: (id: string) => `${BASE}/documents/${id}/file`,
   pageImageUrl: (id: string, page: number) => `${BASE}/documents/${id}/page/${page}/image?scale=2`,
   approve: (id: string, reviewer?: string) =>
-    request<{ success: boolean; status: string; stage: string; vector_stored?: boolean }>(`/documents/${id}/approve`, {
+    request<{ success: boolean; status: string; stage: string; vector_stored?: boolean; original_removed?: boolean }>(`/documents/${id}/approve`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reviewer }),

@@ -152,8 +152,10 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
 
   // ------------------------------------------------------------------ actions
   const approve = () => run(async () => {
-    await api.approve(doc.id, REVIEWER);
-    ok("Approved. The document is verified and now searchable.");
+    const r = await api.approve(doc.id, REVIEWER);
+    ok(r.original_removed
+      ? "Approved. The document is verified and searchable, and its original file was deleted from storage."
+      : "Approved. The document is verified and now searchable.");
     await loadData(true);
   }, "Could not approve");
 
@@ -261,7 +263,10 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           </div>
         </div>
         <div className="row" style={{ gap: 8 }}>
-          <button type="button" className="btn" onClick={rerun} disabled={busy || inFlight}><RotateCw size={15} /> Read again</button>
+          <button type="button" className="btn" onClick={rerun} disabled={busy || inFlight || doc.original_available === false}
+            title={doc.original_available === false ? "The original file is no longer stored, so it cannot be read again" : undefined}>
+            <RotateCw size={15} /> Read again
+          </button>
           {!isRejected && doc.status !== "completed" && <button type="button" className="btn btn-danger" onClick={reject} disabled={busy}><X size={15} /> Reject</button>}
           <button type="button" className="btn btn-danger" onClick={remove} disabled={busy}><Trash2 size={15} /> Delete</button>
           {!isRejected && doc.status !== "completed" && doc.status !== "failed" && !inFlight && (
@@ -337,7 +342,8 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           </div>
           <div className="canvas">
             {viewMode === "preview" ? (
-              <FilePreview imageUrl={api.pageImageUrl(doc.id, currentPage)} fileUrl={api.fileUrl(doc.id)} fileType={doc.file_type || ""} filename={doc.filename} page={currentPage} zoom={zoom} />
+              <FilePreview imageUrl={api.pageImageUrl(doc.id, currentPage)} fileUrl={api.fileUrl(doc.id)} fileType={doc.file_type || ""} filename={doc.filename} page={currentPage} zoom={zoom}
+                original={doc.original_available !== false ? "available" : doc.original_removed ? "removed" : "missing"} />
             ) : (
               <pre className="canvas-text">
                 {viewMode === "page_text"

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, Download, FileSpreadsheet, Loader2 } from "lucide-react";
+import { AlertTriangle, Download, FileSpreadsheet, Loader2, ShieldCheck } from "lucide-react";
 
 const PREVIEWABLE = /^(application\/pdf|image\/)/;
 
@@ -10,8 +10,10 @@ const PREVIEWABLE = /^(application\/pdf|image\/)/;
  * browser (it does not need the browser's PDF viewer or any iframe). Spreadsheets, CSV and text cannot be drawn:
  * they get a download link, and their content is available in the "Page text" views.
  */
-export default function FilePreview({ imageUrl, fileUrl, fileType, filename, page, zoom }: {
+export default function FilePreview({ imageUrl, fileUrl, fileType, filename, page, zoom, original = "available" }: {
   imageUrl: string; fileUrl: string; fileType: string; filename: string; page: number; zoom: number;
+  /** "removed": deleted from storage after approval. "missing": never kept. */
+  original?: "available" | "removed" | "missing";
 }) {
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
 
@@ -20,6 +22,21 @@ export default function FilePreview({ imageUrl, fileUrl, fileType, filename, pag
   const download = (
     <a href={fileUrl} download={filename} className="btn btn-sm"><Download size={14} /> Download original</a>
   );
+
+  if (original !== "available") {
+    return (
+      <div className="canvas-empty" style={{ background: "var(--surface)", minHeight: "100%" }}>
+        <ShieldCheck size={36} />
+        <strong style={{ color: "var(--ink)" }}>{original === "removed" ? "The original file was deleted after approval" : "The original file is not stored"}</strong>
+        <span>
+          {original === "removed"
+            ? "Originals are kept only while a document waits for review. The extracted values and the text that was read are kept."
+            : "Only the extracted values and the text that was read are available."}
+        </span>
+        <span>Open “Page text” or “All text” to see what was read.</span>
+      </div>
+    );
+  }
 
   if (!PREVIEWABLE.test(fileType || "")) {
     return (

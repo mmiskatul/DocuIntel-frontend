@@ -28,6 +28,10 @@ export interface DocumentOut {
   updated_at: string;
   invoice_count: number;
   needs_review: boolean;
+  /** false once the original has been deleted (after approval) or was never kept */
+  original_available?: boolean;
+  original_removed?: boolean;
+  confidence?: number | null;
   summary: DocSummary;
 }
 
