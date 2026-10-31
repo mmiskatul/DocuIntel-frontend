@@ -808,12 +808,12 @@ export default function DocumentDetailsPage({
                 border: "1px solid #e2e8f0",
                 borderTop: "none",
                 borderRadius: "0 0 8px 8px",
-                background: "#ffffff",
-                overflow: "hidden",
+                background: "#e5e7eb",
+                overflow: "auto",
                 position: "relative",
               }}
             >
-              <FilePreview url={api.fileUrl(doc.id)} fileType={doc.file_type || ""} filename={doc.filename} page={currentPage} zoom={zoomLevel} />
+              <FilePreview imageUrl={api.pageImageUrl(doc.id, currentPage)} fileUrl={api.fileUrl(doc.id)} fileType={doc.file_type || ""} filename={doc.filename} page={currentPage} zoom={zoomLevel} />
             </div>
           ) : viewMode === "page_text" ? (
             <div

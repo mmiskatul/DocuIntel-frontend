@@ -76,6 +76,7 @@ export const api = {
       body: JSON.stringify({ left_document_id: left, right_document_id: right, flag_mismatches: flagMismatches }),
     }),
   fileUrl: (id: string) => `${BASE}/documents/${id}/file`,
+  pageImageUrl: (id: string, page: number) => `${BASE}/documents/${id}/page/${page}/image?scale=2`,
   approve: (id: string, reviewer?: string) =>
     request<{ success: boolean; status: string; stage: string; vector_stored?: boolean }>(`/documents/${id}/approve`, {
       method: "POST",
