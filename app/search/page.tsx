@@ -110,7 +110,8 @@ export default function SearchPage() {
         ))}
       </div>
 
-      <form onSubmit={submit} className="card card-pad">
+      <form onSubmit={submit} className="card card-pad" style={{ position: "relative", overflow: "hidden" }} aria-busy={busy}>
+        {busy && <div className="progress-indeterminate" aria-hidden="true" />}
         <div className="row" style={{ flexWrap: "nowrap" }}>
           <label className="search-box" style={{ flex: 1 }}>
             <Search size={15} />
@@ -167,11 +168,13 @@ export default function SearchPage() {
 
       {error && <div className="alert alert-error" role="alert" style={{ marginTop: 16 }}><AlertTriangle size={16} /><div>{error}</div></div>}
 
+      {ragLoading && <AnswerSkeleton />}
+      {loading && <ResultsSkeleton filters={activeMode === "filters"} />}
+
       {ragResult && (
         <section className="card" style={{ marginTop: 16 }} aria-label="Answer">
           <div className="card-head">
             <h2 className="card-title"><Sparkles size={16} /> Answer</h2>
-            <span className="muted small mono">{ragResult.provider_used}{ragResult.latency_ms ? ` · ${(ragResult.latency_ms / 1000).toFixed(1)} s` : ""}</span>
           </div>
           <div className="card-body">
             <p className="answer">{ragResult.answer}</p>
@@ -237,5 +240,53 @@ export default function SearchPage() {
         </section>
       )}
     </div>
+  );
+}
+
+/** Shown while a question is being answered: the answer card with moving placeholder lines. */
+function AnswerSkeleton() {
+  return (
+    <section className="card" style={{ marginTop: 16 }} role="status" aria-live="polite" aria-label="Reading your documents">
+      <div className="card-head">
+        <h2 className="card-title"><Sparkles size={16} /> Answer</h2>
+        <span className="thinking">Reading your documents<span className="dots" aria-hidden="true"><i /><i /><i /></span></span>
+      </div>
+      <div className="card-body" style={{ display: "grid", gap: 11 }}>
+        <div className="skeleton" style={{ height: 15, width: "94%" }} />
+        <div className="skeleton" style={{ height: 15, width: "88%" }} />
+        <div className="skeleton" style={{ height: 15, width: "76%" }} />
+        <div className="skeleton" style={{ height: 15, width: "58%" }} />
+        <div className="row" style={{ marginTop: 10 }}>
+          <div className="skeleton" style={{ height: 34, width: 210, borderRadius: 8 }} />
+          <div className="skeleton" style={{ height: 34, width: 180, borderRadius: 8 }} />
+          <div className="skeleton" style={{ height: 34, width: 230, borderRadius: 8 }} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** Shown while documents are being searched: the results card with moving placeholder rows. */
+function ResultsSkeleton({ filters }: { filters: boolean }) {
+  return (
+    <section className="card" style={{ marginTop: 16 }} role="status" aria-live="polite" aria-label="Searching">
+      <div className="card-head">
+        <h2 className="card-title">{filters ? "Filtering" : "Searching"}<span className="dots" aria-hidden="true"><i /><i /><i /></span></h2>
+      </div>
+      <div style={{ padding: 16, display: "grid", gap: 14 }}>
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} style={{ display: "grid", gridTemplateColumns: "2.2fr 1fr 1fr 1.2fr .8fr", gap: 18, alignItems: "center" }}>
+            <div style={{ display: "grid", gap: 7 }}>
+              <div className="skeleton" style={{ height: 14, width: "70%" }} />
+              <div className="skeleton" style={{ height: 11, width: "95%" }} />
+            </div>
+            <div className="skeleton" style={{ height: 14 }} />
+            <div className="skeleton" style={{ height: 14 }} />
+            <div className="skeleton" style={{ height: 14 }} />
+            <div className="skeleton" style={{ height: 22, borderRadius: 999 }} />
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
