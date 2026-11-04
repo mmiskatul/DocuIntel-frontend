@@ -2,7 +2,7 @@ import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import { api } from "@/lib/api";
 import type { SearchHit, RAGResult, DocumentOut, DocFilters } from "@/lib/types";
 
-export type SearchMode = "rag" | "hybrid" | "filters" | "semantic" | "keyword";
+export type SearchMode = "rag" | "hybrid" | "filters" | "semantic" | "keyword" | "exact";
 
 export interface SearchState {
   query: string;
@@ -49,7 +49,7 @@ const clearResults = (state: SearchState) => {
 export const runSearch = createAsyncThunk(
   "search/runSearch",
   async (
-    { q, mode }: { q: string; mode: "keyword" | "semantic" | "hybrid" },
+    { q, mode }: { q: string; mode: "keyword" | "semantic" | "hybrid" | "exact" },
     { rejectWithValue }
   ) => {
     try {

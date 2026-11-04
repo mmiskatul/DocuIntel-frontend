@@ -100,9 +100,10 @@ export interface EventOut {
 export interface UploadItem {
   id: string | null;
   filename: string;
-  status: "queued" | "rejected";
-  error: string | null;
-  duplicate_of: string | null;
+  status: "queued" | "rejected" | "failed";
+  stage?: string;
+  error?: string | null;
+  duplicate_of?: string | null;
 }
 
 export interface Stats {
@@ -117,7 +118,9 @@ export interface SearchHit {
   page: number | null;
   score: number;
   snippet: string;
-  match: "semantic" | "keyword" | "hybrid" | "filters";
+  match: "semantic" | "keyword" | "hybrid" | "exact" | "filters";
+  matched_by?: string[];
+  matched_exact?: boolean;
   document: DocumentOut;
 }
 

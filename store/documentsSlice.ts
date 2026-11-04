@@ -226,12 +226,14 @@ export const uploadDocuments = createAsyncThunk<number, File[], { rejectValue: s
   const { rejectWithValue } = thunkApi;
   try {
     const items = await api.upload(files);
-    const accepted = items.filter((i) => i.id && i.status !== "rejected");
+    const accepted = items.filter((i) => i.id && i.status === "queued");
+    const refusedItems = items.filter((i) => !(i.id && i.status === "queued"));
     const byName = new Map(files.map((f) => [f.name, f]));
     dispatch(addQueued(accepted.map((i) => ({ id: i.id as string, filename: i.filename, size_bytes: byName.get(i.filename)?.size, file_type: byName.get(i.filename)?.type }))));
-    const refused = items.length - accepted.length;
-    dispatch(notify("success", `${accepted.length} file${accepted.length === 1 ? "" : "s"} queued. They update here as each page is read.`));
-    if (refused) dispatch(notify("error", `${refused} file${refused === 1 ? " was" : "s were"} refused by the server.`));
+    if (accepted.length) dispatch(notify("success", `${accepted.length} file${accepted.length === 1 ? "" : "s"} queued. They update here as each page is read.`));
+    // Say exactly which file failed and why (the backend reports each file on its own)
+    for (const r of refusedItems) dispatch(notify("error", `${r.filename}: ${r.error || "the server refused this file."}`));
+    if (!accepted.length && refusedItems.length) return rejectWithValue(refusedItems.map((r) => `${r.filename}: ${r.error || "refused"}`).join("; "));
     dispatch(syncNow());
     return accepted.length;
   } catch (err) {

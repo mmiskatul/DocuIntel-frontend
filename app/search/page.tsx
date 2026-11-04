@@ -16,6 +16,14 @@ const MODES: { id: SearchMode; label: string; hint: string; icon: typeof Search 
   { id: "filters", label: "Filter", hint: "Narrow by supplier, status or amount", icon: Search },
 ];
 
+const FIND_MODES: SearchMode[] = ["hybrid", "semantic", "keyword", "exact"];
+const FIND_BY: { id: SearchMode; label: string; hint: string }[] = [
+  { id: "hybrid", label: "Smart", hint: "Meaning and exact words together; an exact ID or invoice number always comes first" },
+  { id: "semantic", label: "Meaning", hint: "Finds documents about the same thing, even with different words" },
+  { id: "keyword", label: "Words", hint: "Finds documents containing your words in the name, parties or text" },
+  { id: "exact", label: "Exact", hint: "One specific ID, invoice number, supplier or amount; or fields like supplier:Acme total:1200" },
+];
+
 const EXAMPLES = [
   "What is the total across all invoices?",
   "Which suppliers have we been invoiced by?",
@@ -64,7 +72,7 @@ export default function SearchPage() {
       } else if (m === "rag") {
         await dispatch(runRagQuery({ q: text.trim() })).unwrap();
       } else {
-        await dispatch(runSearch({ q: text.trim(), mode: m === "semantic" || m === "keyword" ? m : "hybrid" })).unwrap();
+        await dispatch(runSearch({ q: text.trim(), mode: FIND_MODES.includes(m) ? (m as "hybrid" | "semantic" | "keyword" | "exact") : "hybrid" })).unwrap();
       }
     } catch (err: any) {
       // a failed search store thunk throws its message as plain text, not as an Error
@@ -91,6 +99,8 @@ export default function SearchPage() {
   const placeholder =
     activeMode === "rag" ? "Ask anything, e.g. Which supplier did we pay the most?"
     : activeMode === "filters" ? "Optional words to look for"
+    : activeMode === "exact" ? "An ID, invoice number or supplier, or fields: supplier:Acme total:1200"
+    : activeMode === "semantic" ? "Describe what you are looking for, e.g. cloud hosting costs"
     : "Search by supplier, invoice number or what the invoice is for";
 
   return (
@@ -104,8 +114,8 @@ export default function SearchPage() {
 
       <div className="seg" role="tablist" aria-label="Search type" style={{ marginBottom: 14 }}>
         {MODES.map(({ id, label, hint, icon: Icon }) => (
-          <button key={id} type="button" role="tab" aria-selected={activeMode === id} title={hint}
-            onClick={() => { dispatch(setMode(id)); setLocalError(null); }}>
+          <button key={id} type="button" role="tab" aria-selected={id === "hybrid" ? FIND_MODES.includes(activeMode) : activeMode === id} title={hint}
+            onClick={() => { if (!(id === "hybrid" && FIND_MODES.includes(activeMode))) dispatch(setMode(id)); setLocalError(null); }}>
             <Icon size={14} />{label}
           </button>
         ))}
@@ -122,6 +132,19 @@ export default function SearchPage() {
             {busy ? <><Loader2 size={15} className="spin" /> {activeMode === "rag" ? "Reading…" : "Searching…"}</> : activeMode === "rag" ? <><Sparkles size={15} /> Ask</> : "Search"}
           </button>
         </div>
+
+        {FIND_MODES.includes(activeMode) && (
+          <div className="row" style={{ marginTop: 12, gap: 8, flexWrap: "wrap" }} role="group" aria-label="Search by">
+            <span className="eyebrow">Search by</span>
+            <div className="seg">
+              {FIND_BY.map(({ id, label, hint }) => (
+                <button key={id} type="button" title={hint} aria-pressed={activeMode === id}
+                  className={activeMode === id ? "active" : undefined}
+                  onClick={() => { dispatch(setMode(id)); setLocalError(null); if (q.trim()) void execute(q, id); }}>{label}</button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {activeMode !== "filters" && recent.length > 0 && (
           <div style={{ marginTop: 14 }}>
@@ -218,7 +241,7 @@ export default function SearchPage() {
                           <button type="button" className="doc-name link" onClick={() => open(h.document_id)} style={{ textAlign: "left" }}>{d?.filename || "Document"}</button>
                           {h.snippet && <div className="hit-snippet">{h.snippet}</div>}
                         </td>
-                        <td><span className="tag">{h.match}</span><div className="cell-sub mono">{Math.round((h.score ?? 0) * 100)}% relevant</div></td>
+                        <td><span className="tag">{h.match === "exact" || h.matched_exact ? "exact match" : h.match}</span><div className="cell-sub mono">{Math.round((h.score ?? 0) * 100)}% relevant</div></td>
                         <td className="mono">{s?.invoice_number || <span className="muted">—</span>}</td>
                         <td>{s?.supplier_name || <span className="muted">—</span>}</td>
                         <td className="num">{s?.total != null ? money(s.total, s.currency) : <span className="muted">—</span>}</td>
